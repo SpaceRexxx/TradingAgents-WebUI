@@ -5,6 +5,7 @@ from pathlib import Path
 from functools import wraps
 from rich.console import Console
 from dotenv import load_dotenv
+from InquirerPy import inquirer # <-- 修改点 1: 添加此导入
 
 # Load environment variables from .env file
 load_dotenv()
@@ -467,13 +468,35 @@ def get_user_selections():
     )
     selected_research_depth = select_research_depth()
 
-    # Step 5: OpenAI backend
+    # ----- 修改点 2: 替换 Step 5 的逻辑 -----
+    # Step 5: LLM Provider
     console.print(
         create_question_box(
-            "Step 5: OpenAI backend", "Select which service to talk to"
+            "Step 5: LLM Provider", "Select which service to talk to"
         )
     )
-    selected_llm_provider, backend_url = select_llm_provider()
+    
+    # Define the providers and their URLs
+    llm_providers = {
+        "OpenAI": "https://api.openai.com/v1",
+        "Groq": "https://api.groq.com/openai/v1",
+        "LMStudio": "http://localhost:1234/v1",
+        "Ollama": "http://localhost:11434/v1",
+        "Anthropic": "https://api.anthropic.com/v1",
+        "Google": "https://generativelanguage.googleapis.com/v1",
+        "DeepSeek": "https://api.deepseek.com/v1",  # Added DeepSeek
+    }
+
+    # Use inquirer to ask the user to select a provider
+    selected_llm_provider = inquirer.select(
+        message="Select your LLM Provider",
+        choices=list(llm_providers.keys()),
+        default="OpenAI",
+    ).execute()
+    
+    backend_url = llm_providers[selected_llm_provider]
+    console.print(f"You selected: {selected_llm_provider}\tURL: {backend_url}")
+    # ----- 结束修改 -----
     
     # Step 6: Thinking agents
     console.print(

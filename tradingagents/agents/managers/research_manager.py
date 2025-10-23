@@ -16,26 +16,36 @@ def create_research_manager(llm, memory):
         past_memories = memory.get_memories(curr_situation, n_matches=2)
 
         past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
+        # 检查并处理 past_memories 可能为 None 的情况
+        if past_memories:
+            for i, rec in enumerate(past_memories, 1):
+                past_memory_str += rec.get("recommendation", "") + "\n\n"
+        
+        if not past_memory_str:
+            past_memory_str = "未找到相关历史交易记忆。"
 
-        prompt = f"""As the portfolio manager and debate facilitator, your role is to critically evaluate this round of debate and make a definitive decision: align with the bear analyst, the bull analyst, or choose Hold only if it is strongly justified based on the arguments presented.
+        # ----- START: 中文翻译和指令修改 -----
+        prompt = f"""作为投资组合经理和辩论主持人，你的职责是批判性地评估这一轮辩论，并做出一个明确的决定：同意空头分析师、同意多头分析师，或者只有在有充分理由支持的情况下才选择“持有”。
 
-Summarize the key points from both sides concisely, focusing on the most compelling evidence or reasoning. Your recommendation—Buy, Sell, or Hold—must be clear and actionable. Avoid defaulting to Hold simply because both sides have valid points; commit to a stance grounded in the debate's strongest arguments.
+请简明扼要地总结双方的关键论点，重点关注最令人信服的证据或推理。你的建议——买入、卖出或持有——必须清晰且可操作。避免仅仅因为双方都有道理就默认选择“持有”；请坚定地选择一个基于辩论中最有力论点的立场。
 
-Additionally, develop a detailed investment plan for the trader. This should include:
+此外，请为交易员制定一份详细的投资计划。该计划应包括：
 
-Your Recommendation: A decisive stance supported by the most convincing arguments.
-Rationale: An explanation of why these arguments lead to your conclusion.
-Strategic Actions: Concrete steps for implementing the recommendation.
-Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving. Present your analysis conversationally, as if speaking naturally, without special formatting. 
+你的建议：一个由最有说服力的论点支持的果断立场。
+基本原理：解释为什么这些论点能引导你得出结论。
+战略行动：实施该建议的具体步骤。
+请考虑你在类似情况下的历史错误。利用这些见解来改进你的决策过程，确保你正在学习和进步。请以自然的对话方式呈现你的分析，不要使用特殊格式。
 
-Here are your past reflections on mistakes:
+以下是你过去对错误的反思：
 \"{past_memory_str}\"
 
-Here is the debate:
-Debate History:
-{history}"""
+以下是本次辩论内容：
+辩论历史：
+{history}
+
+**重要指令：你的所有分析、推理、投资计划和最终决策都必须使用中文撰写。**"""
+        # ----- END OF MODIFICATION -----
+        
         response = llm.invoke(prompt)
 
         new_investment_debate_state = {
