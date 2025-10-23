@@ -149,10 +149,15 @@ def select_shallow_thinking_agent(provider) -> str:
             ("Meta: Llama 3.3 8B Instruct - A lightweight and ultra-fast variant of Llama 3.3 70B", "meta-llama/llama-3.3-8b-instruct:free"),
             ("google/gemini-2.0-flash-exp:free - Gemini Flash 2.0 offers a significantly faster time to first token", "google/gemini-2.0-flash-exp:free"),
         ],
+        "deepseek": [
+        ("DeepSeek Chat - General purpose, strong reasoning", "deepseek-chat"),
+        ("DeepSeek reasoner - Specialized for reasoner tasks", "deepseek-reasoner"),
+        ],
         "ollama": [
             ("llama3.1 local", "llama3.1"),
             ("llama3.2 local", "llama3.2"),
         ]
+
     }
 
     choice = questionary.select(
@@ -210,6 +215,10 @@ def select_deep_thinking_agent(provider) -> str:
         "openrouter": [
             ("DeepSeek V3 - a 685B-parameter, mixture-of-experts model", "deepseek/deepseek-chat-v3-0324:free"),
             ("Deepseek - latest iteration of the flagship chat model family from the DeepSeek team.", "deepseek/deepseek-chat-v3-0324:free"),
+        ],
+         "deepseek": [
+            ("DeepSeek Chat - General purpose, strong reasoning", "deepseek-chat"),
+            ("DeepSeek reasoner - Specialized for reasoner tasks", "deepseek-reasoner"),
         ],
         "ollama": [
             ("llama3.1 local", "llama3.1"),
