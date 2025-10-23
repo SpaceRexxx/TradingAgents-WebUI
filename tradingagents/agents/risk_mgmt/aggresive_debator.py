@@ -54,6 +54,6 @@ def create_risky_debator(llm):
             "count": risk_debate_state["count"] + 1,
         }
 
-        return {"risk_debate_state": new_risk_debate_state}
+        return {"risk_debate_state": new_risk_debate_state, "sender": "Risky Analyst"}
 
     return risky_node
