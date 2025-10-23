@@ -59,6 +59,7 @@ def create_fundamentals_analyst(llm):
         return {
             "messages": [result],
             "fundamentals_report": report,
+            "sender": "Fundamentals Analyst",
         }
 
     return fundamentals_analyst_node

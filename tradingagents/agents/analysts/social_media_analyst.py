@@ -55,6 +55,7 @@ def create_social_media_analyst(llm):
         return {
             "messages": [result],
             "sentiment_report": report,
+            "sender": "Social Analyst",
         }
 
     return social_media_analyst_node

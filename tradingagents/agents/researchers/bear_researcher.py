@@ -66,6 +66,6 @@ def create_bear_researcher(llm, memory):
             "count": investment_debate_state["count"] + 1,
         }
 
-        return {"investment_debate_state": new_investment_debate_state}
+        return {"investment_debate_state": new_investment_debate_state, "sender": "Bear Researcher"}
 
     return bear_node

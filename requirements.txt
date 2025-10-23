@@ -24,10 +24,9 @@ requests
 tqdm
 pytz
 redis
-chainlit
 rich
 questionary
 streamlit
-xhtml2pdf
 markdown2
 python-dotenv
+playwright
