@@ -1,0 +1,48 @@
+# ===================================================================
+# TradingAgents - Source Dependencies
+# This file is manually maintained.
+# Run 'pip-compile' to generate the requirements.txt file.
+# ===================================================================
+
+# --- Core AI/ML Frameworks ---
+langchain
+langchain-core
+langchain-openai
+langchain-experimental
+langchain_anthropic
+langchain-google-genai
+langgraph
+openai
+chromadb
+
+# --- Data Handling & Finance ---
+pandas
+yfinance
+stockstats
+akshare
+tushare
+eodhd
+finnhub-python
+backtrader
+
+# --- Web Scraping & APIs ---
+praw
+feedparser
+parsel
+requests
+
+# --- Web App & CLI ---
+streamlit
+playwright
+markdown2
+rich
+questionary
+python-dotenv
+typer
+
+# --- Utility Libraries ---
+typing-extensions
+setuptools
+tqdm
+pytz
+redis
