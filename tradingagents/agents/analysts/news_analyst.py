@@ -54,6 +54,7 @@ def create_news_analyst(llm):
         return {
             "messages": [result],
             "news_report": report,
+            "sender": "News Analyst",
         }
 
     return news_analyst_node

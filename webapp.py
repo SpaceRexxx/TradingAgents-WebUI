@@ -1,14 +1,15 @@
-# webapp.py (最终优化版 - 修复PDF表格和文本溢出)
+# webapp.py (最终优化版 - 使用 Playwright 生成 PDF)
 
 import streamlit as st
 import datetime
 from pathlib import Path
 import re
 import io
+import asyncio
 
 # 导入PDF生成库
 import markdown2
-from xhtml2pdf import pisa
+from playwright.async_api import async_playwright
 
 # 导入项目核心组件
 from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -48,66 +49,94 @@ def get_latest_argument(history: str, agent_prefix: str) -> str:
     matches = re.findall(pattern, history, re.DOTALL)
     return matches[-1].strip() if matches else "等待发言..."
 
-# ----- START: 最终优化的 PDF 生成函数 -----
+# ----- START: 使用 Playwright 的 PDF 生成方案 -----
+
+# 这是一个异步函数，包含了所有 Playwright 的核心逻辑
+async def _async_generate_pdf_with_playwright(styled_html):
+    """使用 Playwright 的无头浏览器将HTML内容渲染为PDF"""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        # 将HTML内容加载到页面中，并等待网络空闲以确保所有资源（如字体）加载完成
+        await page.set_content(styled_html, wait_until='networkidle')
+        # 生成PDF
+        pdf_bytes = await page.pdf(
+            format='A4',
+            margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'}
+        )
+        await browser.close()
+        return pdf_bytes
+
+# 这是 Streamlit 调用的同步函数，它会启动并运行上面的异步函数
 def generate_pdf_report(final_state, ticker, analysis_date):
-    """根据最终分析状态生成PDF报告"""
+    """根据最终分析状态生成PDF报告 (通过 Playwright)"""
     try:
+        # 1. 准备HTML内容
         report_parts = [f"<h1>{ticker} 交易分析报告</h1>", f"<p><b>分析日期:</b> {analysis_date}</p><hr>"]
-        report_keys_in_order = [ ("第一阶段：分析师团队报告", [ ("market_report", "市场分析报告"), ("news_report", "新闻分析报告"), ("sentiment_report", "社交情绪报告"), ("fundamentals_report", "基本面分析报告"), ]), ("第二阶段：研究团队决策", [("investment_plan", "")]), ("第三阶段：交易团队计划", [("trader_investment_plan", "")]), ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")]), ]
+        report_keys_in_order = [
+            ("第一阶段：分析师团队报告", [
+                ("market_report", "市场分析报告"),
+                ("news_report", "新闻分析报告"),
+                ("sentiment_report", "社交情绪报告"),
+                ("fundamentals_report", "基本面分析报告"),
+            ]),
+            ("第二阶段：研究团队决策", [("investment_plan", "")]),
+            ("第三阶段：交易团队计划", [("trader_investment_plan", "")]),
+            ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")]),
+        ]
+        
         for section_title, keys in report_keys_in_order:
             section_content = []
             for key, sub_title in keys:
                 if final_state.get(key) and final_state[key]:
-                    content = final_state[key]
-                    if sub_title: section_content.append(f"<h3>{sub_title}</h3>{content}")
-                    else: section_content.append(content)
-            if section_content: report_parts.append(f"<h2>{section_title}</h2>" + "\n".join(section_content))
+                    # 使用 markdown2 库将 Markdown 文本转换为高质量的 HTML
+                    html_from_md = markdown2.markdown(final_state[key], extras=["tables", "fenced-code-blocks", "header-ids"])
+                    if sub_title:
+                        section_content.append(f"<h3>{sub_title}</h3>{html_from_md}")
+                    else:
+                        section_content.append(html_from_md)
+            if section_content:
+                report_parts.append(f"<h2>{section_title}</h2>" + "\n".join(section_content))
         
-        full_markdown = "\n\n".join(report_parts)
-        html = markdown2.markdown(full_markdown, extras=["tables", "fenced-code-blocks", "header-ids", "break-on-newline"])
+        html_body = "\n\n".join(report_parts)
         
+        # 2. 准备CSS样式
+        # Playwright 使用现代浏览器引擎，CSS可以更简洁标准
         css = """
-        @font-face { font-family: 'NotoSansSC'; src: url('fonts/NotoSansSC-Regular.ttf'); }
-        @page { size: a4 portrait; margin: 1.5cm; }
-        body { font-family: 'NotoSansSC', sans-serif; font-size: 10pt; line-height: 1.6; }
+        @font-face { 
+            font-family: 'NotoSansSC'; 
+            /* 确保字体文件路径正确，如果 fonts 目录在 webapp.py 同级，此路径即可 */
+            src: url('fonts/NotoSansSC-Regular.ttf'); 
+        }
+        body { 
+            font-family: 'NotoSansSC', sans-serif; 
+            font-size: 10pt; 
+            line-height: 1.6; 
+            margin: 0;
+            padding: 0;
+        }
         h1 { font-size: 22pt; color: #1E293B; text-align: center; }
-        h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #64748B; padding-bottom: 6px; margin-top: 25px;}
+        h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;}
         h3 { font-size: 13pt; color: #475569; margin-top: 20px;}
-        
-        /* 强制所有元素在需要时换行 */
-        p, li, th, td, div {
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-
-        /* 表格样式 */
         table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-        th, td { border: 1px solid #cbd5e1; text-align: left; padding: 8px; }
-        th { background-color: #f1f5f9; font-weight: bold; }
-
-        /* 针对“关键指标汇总表”的特定修复 */
-        /* 为第一列（指标类别）设置固定宽度和垂直对齐 */
-        table td:first-child {
-            width: 120px; /* 或根据需要调整 */
-            min-width: 120px;
-            vertical-align: middle; /* 垂直居中对齐 */
-        }
-        /* 为第二列（具体指标）设置强制不换行 */
-        table td:nth-child(2) {
-            white-space: nowrap;
-        }
+        th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; }
+        th { background-color: #f8fafc; font-weight: bold; }
         """
-        styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html}</body></html>"
         
-        pdf_buffer = io.BytesIO()
-        pisa.CreatePDF(io.StringIO(styled_html), dest=pdf_buffer, encoding='UTF-8')
+        styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
+        
+        # 3. 运行异步函数来生成PDF
+        st.info("正在启动浏览器引擎生成高质量PDF，请稍候...")
+        pdf_data = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
+        st.success("PDF报告已生成！")
+        return pdf_data
 
-        if pisa.pisaDocument.err: st.error(f"生成PDF时出错: {pisa.pisaDocument.err}"); return None
-        pdf_buffer.seek(0)
-        return pdf_buffer.getvalue()
     except Exception as e:
-        st.error(f"生成PDF时发生意外错误: {e}"); import traceback; traceback.print_exc(); return None
-# ----- END: 最终优化的 PDF 生成函数 -----
+        st.error(f"使用 Playwright 生成PDF时发生意外错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+# ----- END: PDF 生成方案 -----
 
 
 # --- UI 组件 (侧边栏) ---
@@ -162,6 +191,15 @@ if st.session_state.get('start_analysis', False):
     else:
         config = DEFAULT_CONFIG.copy(); config.update({ "max_debate_rounds": selected_research_depth, "max_risk_discuss_rounds": selected_research_depth, "quick_think_llm": shallow_thinker, "deep_think_llm": deep_thinker, "backend_url": backend_url, "llm_provider": selected_llm_provider_name.lower(), "has_position": st.session_state.get("has_position", "未持有") })
         with st.spinner("正在初始化分析图..."):
+            # 在这里添加 sender 字段
+            agents_to_modify = [
+                'tradingagents.agents.analysts.market_analyst.py', 'tradingagents.agents.analysts.social_media_analyst.py',
+                'tradingagents.agents.analysts.news_analyst.py', 'tradingagents.agents.analysts.fundamentals_analyst.py',
+                'tradingagents.agents.researchers.bull_researcher.py', 'tradingagents.agents.researchers.bear_researcher.py',
+                'tradingagents.agents.managers.research_manager.py', 'tradingagents.agents.risk_mgmt.aggresive_debator.py',
+                'tradingagents.agents.risk_mgmt.neutral_debator.py', 'tradingagents.agents.risk_mgmt.conservative_debator.py',
+                'tradingagents.agents.managers.risk_manager.py'
+            ]
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
             init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date)
             args = graph.propagator.get_graph_args()
@@ -201,7 +239,7 @@ if st.session_state.get('start_analysis', False):
                 st.subheader("消息与工具日志"); 
                 if "messages" in chunk and chunk["messages"]:
                     last_message = chunk["messages"][-1]
-                    if hasattr(last_message, "content") and last_message.content: st.session_state.messages.append(f"**思考:** {last_message.content[:200]}...")
+                    if hasattr(last_message, "content") and last_message.content and isinstance(last_message.content, str): st.session_state.messages.append(f"**思考:** {last_message.content[:200]}...")
                     if hasattr(last_message, "tool_calls"):
                         for tc in last_message.tool_calls: st.session_state.messages.append(f"**🛠️ 工具调用:** `{tc['name']}`")
                 st.markdown("\n\n".join(st.session_state.messages[-10:]))
