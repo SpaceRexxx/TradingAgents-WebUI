@@ -84,6 +84,7 @@ MACD 相关指标:
         return {
             "messages": [result],
             "market_report": report,
+            "sender": "Market Analyst",
         }
 
     return market_analyst_node
