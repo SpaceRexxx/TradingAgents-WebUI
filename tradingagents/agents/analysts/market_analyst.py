@@ -1,4 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import ToolMessage
 import time
 import json
 from tradingagents.agents.utils.agent_utils import get_stock_data, get_indicators
@@ -17,8 +18,7 @@ def create_market_analyst(llm):
             get_indicators,
         ]
 
-        # ----- START: 中文翻译和指令修改 -----
-        # 强制要求并行调用，减少 API 往返次数，防止连接被重置
+        # ----- START: 中文提示词 -----
         system_message = (
             """你是一名负责分析金融市场的交易助手。你的任务是从以下列表中为给定的市场状况或交易策略选择**最相关的指标**。
 目标是选择最多**4个**指标：
@@ -28,20 +28,30 @@ def create_market_analyst(llm):
 4. 成交量类选 1 个（如果可用）。
 
 **重要指令：**
-- **必须一次性调用所有工具**：请在你的第一条回复中**并行**发出所有指标的获取指令（例如：同时列出获取 sma、rsi、macd 的工具调用），**严禁**一个一个按顺序分批调用，以减少 API 请求轮数，防止连接超时。
+- **必须一次性调用所有工具**：请在你的第一条回复中**并行**发出所有指标的获取指令（例如：同时列出获取 sma、rsi、macd 的工具调用），**严禁**一个一个按顺序分批调用。
 - 请确保首先调用 get_stock_data 获取基础价格，并**在同一条消息中**调用 get_indicators 获取所有需要的技术指标。
-- 指标名称必须完全匹配：
-
-移动平均线: close_50_sma, close_200_sma, close_10_ema
-MACD 相关: macd, macds, macdh
-动量指标: rsi
-波动性指标: boll, boll_ub, boll_lb, atr
-成交量相关: vwma
-
 - 请撰写一份非常详尽和细致入微的分析报告。报告结尾附带 Markdown 表格。
 - **所有分析和最终报告都必须使用中文撰写。**"""
         )
-        # ----- END OF MODIFICATION -----
+        # ----- END -----
+
+        # 【核心优化】清洗进入节点的消息历史
+        # 遍历历史消息，将庞大的原始 CSV 工具输出替换为精简占位符
+        messages = state["messages"]
+        sanitized_messages = []
+        for m in messages:
+            if isinstance(m, ToolMessage):
+                # 识别 get_stock_data 发出的原始 CSV 数据
+                # 注意：LangChain 的 ToolMessage 有时通过 getattr(m, 'name', '') 获取工具名
+                tool_name = getattr(m, "name", "")
+                if tool_name == "get_stock_data" and len(str(m.content)) > 1000:
+                    # 创建一个新的精简消息，保留 tool_call_id（这是 API 校验的关键）
+                    m = ToolMessage(
+                        content="[原始个股 CSV 数据已由系统自动清洗精简，以节省 API 带宽。指标计算已成功完成，请直接基于后续工具返回的具体指标数值进行分析。]",
+                        tool_call_id=m.tool_call_id,
+                        name=m.name
+                    )
+            sanitized_messages.append(m)
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -49,7 +59,7 @@ MACD 相关: macd, macds, macdh
                     "system",
                     "你是一位乐于助人的人工智能助手，与其他助手协同工作。"
                     "请使用提供的工具来回答问题。尽可能在一次工具调用中提出所有需要的请求。"
-                    "如果你无法完全回答，另一位分析师会接替。如果你得出了最终建议，请标注“最终交易建议：**买入/持有/卖出**”。"
+                    "如果你得出了最终建议，请标注“最终交易建议：**买入/持有/卖出**”。"
                     "你可以使用以下工具：{tool_names}。\n{system_message}"
                     "当前日期：{current_date}，关注公司：{ticker}",
                 ),
@@ -62,45 +72,20 @@ MACD 相关: macd, macds, macdh
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(ticker=ticker)
 
+        # 绑定工具
         chain = prompt | llm.bind_tools(tools)
 
-        # 1. 第一次调用：获取数据和指标
-        result = chain.invoke(state["messages"])
-        
-        # 2. 如果发生了工具调用，我们需要处理结果并进行第二次调用（总结汇报）
-        if result.tool_calls:
-            # 将工具调用 AI 消息加入历史
-            messages = state["messages"] + [result]
-            
-            # 【重要】清洗消息历史：移除冗余的原始数据
-            # get_stock_data 返回的是整段 CSV，非常占空间。一旦指标算完，它就没用了。
-            new_messages = []
-            for m in messages:
-                # 如果是 get_stock_data 的工具结果消息，且长度很大，则予以精简
-                if getattr(m, "name", "") == "get_stock_data" and len(str(m.content)) > 1000:
-                    from langchain_core.messages import ToolMessage
-                    m = ToolMessage(
-                        content="[原始 CSV 数据已清洗，仅保留指标分析结果以节省带宽]",
-                        tool_call_id=m.tool_call_id,
-                        name=m.name
-                    )
-                new_messages.append(m)
-            
-            # 【重要】清洗后的第二次调用：让模型根据指标结果写报告
-            # 这次调用不绑定工具，强制它生成最终文本
-            final_report_chain = prompt | llm
-            final_report_result = final_report_chain.invoke(new_messages)
-            
-            return {
-                "messages": [result, final_report_result],
-                "market_report": final_report_result.content,
-                "sender": "Market Analyst",
-            }
+        # 使用清洗后的消息发起调用
+        result = chain.invoke(sanitized_messages)
 
-        # 3. 如果没调用工具（直接回复了），则直接返回
+        report = ""
+        # 如果模型没有新的工具请求，说明它生成了最终报告
+        if not result.tool_calls:
+            report = result.content
+
         return {
             "messages": [result],
-            "market_report": result.content,
+            "market_report": report,
             "sender": "Market Analyst",
         }
 
