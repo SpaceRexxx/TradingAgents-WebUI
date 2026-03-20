@@ -15,6 +15,13 @@ import asyncio
 import os  # 【新增】
 import json  # 【新增】
 
+# 自动加载 .env 文件（兼容未激活 conda 环境的情况）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env", override=False)
+except ImportError:
+    pass
+
 # 导入PDF生成库
 import markdown2
 from playwright.async_api import async_playwright
