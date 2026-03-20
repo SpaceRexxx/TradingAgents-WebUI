@@ -98,11 +98,13 @@ class TradingAgentsGraph:
             exist_ok=True,
         )
 
-        # 2. 初始化网络客户端：禁用 HTTP/2 以解决与部分代理环境的冲突
+        # 2. 初始化网络客户端：禁用 HTTP/2 且不信任环境代理
         import httpx
+        # 特别针对 macOS：显式禁用 trust_env，防止 httpx 读取可能导致冲突的系统代理设置
         custom_client = httpx.Client(
-            http2=False,      # 关键：禁用 HTTP/2
-            trust_env=True    # 信任系统代理
+            http2=False,                          # 禁用 http2
+            trust_env=False,                      # 关键：不读取系统代理，避免隐形干扰
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
 
         # 3. 初始化记忆组件 (FinancialSituationMemory 调用时会读取 self.config)
