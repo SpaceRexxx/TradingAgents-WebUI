@@ -346,48 +346,53 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date)
             args = graph.propagator.get_graph_args()
             
-        final_chunk_for_state = None # 【新增】
-        for chunk in graph.graph.stream(init_agent_state, **args):
-            final_chunk_for_state = chunk # 【新增】
-            progress_value = 0; progress_text = "分析已开始..."
-            if chunk.get("final_trade_decision"): progress_value = 100; progress_text = "阶段 5/5: 已生成最终决策"
-            elif chunk.get("risk_debate_state") and chunk["risk_debate_state"]["history"]: progress_value = 85; progress_text = "阶段 4/5: 风险管理团队辩论中..."
-            elif chunk.get("trader_investment_plan"): progress_value = 70; progress_text = "阶段 3/5: 交易团队制定计划中..."
-            elif chunk.get("investment_plan"): progress_value = 50; progress_text = "阶段 2/5: 研究经理决策中..."
-            elif chunk.get("investment_debate_state") and chunk["investment_debate_state"]["history"]: progress_value = 35; progress_text = "阶段 2/5: 研究团队辩论中..."
-            elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
-            progress_placeholder.progress(progress_value, text=progress_text)
-            
-            with status_placeholder.container():
-                st.subheader("代理状态")
-                current_sender_name = SENDER_MAP.get(chunk.get("sender"))
-                if current_sender_name and current_sender_name != st.session_state.previous_sender:
-                    if st.session_state.previous_sender: st.session_state.agent_status[st.session_state.previous_sender] = "completed"
-                    st.session_state.agent_status[current_sender_name] = "in_progress"
-                    st.session_state.previous_sender = current_sender_name
-                status_md = "| 团队 | 代理 | 状态 |\n| --- | --- | --- |\n"
-                for team, agents in TEAMS_STRUCTURE.items():
-                    team_name_tracker = team
-                    for agent in agents:
-                        if agent in selected_analyst_names or team != "分析师团队":
-                            status = st.session_state.agent_status.get(agent, "pending"); status_icon = "⚪" if status == "pending" else ("⏳" if status == "in_progress" else "✅")
-                            status_md += f"| {team_name_tracker} | **{agent}** | {status_icon} {status} |\n"; team_name_tracker = ""
-                st.markdown(status_md)
-                
-            with messages_placeholder.container():
-                st.subheader("消息与工具日志");
-                if "messages" in chunk and chunk["messages"]:
-                    last_message = chunk["messages"][-1]; content_str = str(last_message.content) if hasattr(last_message, 'content') else ''
-                    if content_str: st.session_state.messages.append(f"**思考:** {content_str[:200]}...")
-                    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                        for tc in last_message.tool_calls: st.session_state.messages.append(f"**🛠️ 工具调用:** `{tc.get('name', 'N/A')}`")
-                st.markdown("\n\n".join(st.session_state.messages[-10:]))
-                
-            with report_placeholder.container():
-                display_live_report(chunk)
 
-        # 【修改】流结束后，设置 final_state
-        if final_chunk_for_state:
+
+        final_chunk_for_state = None
+        try:
+            for chunk in graph.graph.stream(init_agent_state, **args):
+                final_chunk_for_state = chunk
+                progress_value = 0; progress_text = "分析已开始..."
+                if chunk.get("final_trade_decision"): progress_value = 100; progress_text = "阶段 5/5: 已生成最终决策"
+                elif chunk.get("risk_debate_state") and chunk["risk_debate_state"]["history"]: progress_value = 85; progress_text = "阶段 4/5: 风险管理团队辩论中..."
+                elif chunk.get("trader_investment_plan"): progress_value = 70; progress_text = "阶段 3/5: 交易团队制定计划中..."
+                elif chunk.get("investment_plan"): progress_value = 50; progress_text = "阶段 2/5: 研究经理决策中..."
+                elif chunk.get("investment_debate_state") and chunk["investment_debate_state"]["history"]: progress_value = 35; progress_text = "阶段 2/5: 研究团队辩论中..."
+                elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
+                progress_placeholder.progress(progress_value, text=progress_text)
+                
+                with status_placeholder.container():
+                    st.subheader("代理状态")
+                    current_sender_name = SENDER_MAP.get(chunk.get("sender"))
+                    if current_sender_name and current_sender_name != st.session_state.previous_sender:
+                        if st.session_state.previous_sender: st.session_state.agent_status[st.session_state.previous_sender] = "completed"
+                        st.session_state.agent_status[current_sender_name] = "in_progress"
+                        st.session_state.previous_sender = current_sender_name
+                    status_md = "| 团队 | 代理 | 状态 |\n| --- | --- | --- |\n"
+                    for team, agents in TEAMS_STRUCTURE.items():
+                        team_name_tracker = team
+                        for agent in agents:
+                            if agent in selected_analyst_names or team != "分析师团队":
+                                status = st.session_state.agent_status.get(agent, "pending"); status_icon = "⚪" if status == "pending" else ("⏳" if status == "in_progress" else "✅")
+                                status_md += f"| {team_name_tracker} | **{agent}** | {status_icon} {status} |\n"; team_name_tracker = ""
+                    st.markdown(status_md)
+                    
+                with messages_placeholder.container():
+                    st.subheader("消息与工具日志");
+                    if "messages" in chunk and chunk["messages"]:
+                        last_message = chunk["messages"][-1]; content_str = str(last_message.content) if hasattr(last_message, 'content') else ''
+                        if content_str: st.session_state.messages.append(f"**思考:** {content_str[:200]}...")
+                        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+                            for tc in last_message.tool_calls: st.session_state.messages.append(f"**🛠️ 工具调用:** `{tc.get('name', 'N/A')}`")
+                    st.markdown("\n\n".join(st.session_state.messages[-10:]))
+                    
+                with report_placeholder.container():
+                    display_live_report(chunk)
+        except Exception as e:
+            st.error(f"❌ 分析中断 (API 连接错误): {str(e)}")
+            st.info("💡 提示: 这通常是由于 API 响应过长、网络环境不稳定或 API Key 额度不足引起的。我已经优化了请求体积，请尝试再次点击“开始分析”。")
+            st.session_state.start_analysis = False
+            st.stop()
             st.session_state.final_state = final_chunk_for_state
             if st.session_state.previous_sender: 
                 st.session_state.agent_status[st.session_state.previous_sender] = "completed"
