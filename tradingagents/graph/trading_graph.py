@@ -123,19 +123,26 @@ class TradingAgentsGraph:
             api_key = os.environ.get("DEEPSEEK_API_KEY")
             if not api_key:
                 raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
+            
+            # DeepSeek 官方推荐 base_url 是 https://api.deepseek.com
+            # 如果末尾有 /v1，库内部拼接时可能会出问题，这里做一下处理
+            b_url = self.config["backend_url"]
+            if b_url.endswith("/v1") or b_url.endswith("/v1/"):
+                b_url = b_url.replace("/v1", "").rstrip("/")
+
             self.deep_thinking_llm = ChatOpenAI(
                 model=self.config["deep_think_llm"],
                 api_key=api_key,
-                base_url=self.config["backend_url"],
-                max_retries=3,    # 自动重试 3 次，应对网络抖动
-                timeout=300,      # DeepSeek 大模型响应较慢，需要更长超时
+                base_url=b_url,
+                max_retries=5,    # 增加重试次数
+                timeout=900,      # 对于深度思考 (Reasoner) 模型，响应可能非常慢，给足 15 分钟
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
                 api_key=api_key,
-                base_url=self.config["backend_url"],
-                max_retries=3,
-                timeout=300,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
