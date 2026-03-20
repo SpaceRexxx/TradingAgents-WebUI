@@ -95,26 +95,26 @@ class TradingAgentsGraph:
                 model=self.config["deep_think_llm"],
                 base_url=self.config["backend_url"],
                 max_retries=3,
-                timeout=120,
+                timeout=300,
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
                 base_url=self.config["backend_url"],
                 max_retries=3,
-                timeout=120,
+                timeout=300,
             )
         elif provider == "anthropic":
             self.deep_thinking_llm = ChatAnthropic(
                 model=self.config["deep_think_llm"],
                 base_url=self.config["backend_url"],
                 max_retries=3,
-                timeout=120,
+                timeout=300,
             )
             self.quick_thinking_llm = ChatAnthropic(
                 model=self.config["quick_think_llm"],
                 base_url=self.config["backend_url"],
                 max_retries=3,
-                timeout=120,
+                timeout=300,
             )
         elif provider == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
@@ -128,14 +128,14 @@ class TradingAgentsGraph:
                 api_key=api_key,
                 base_url=self.config["backend_url"],
                 max_retries=3,    # 自动重试 3 次，应对网络抖动
-                timeout=120,      # DeepSeek 大模型响应较慢，需要更长超时
+                timeout=300,      # DeepSeek 大模型响应较慢，需要更长超时
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
                 api_key=api_key,
                 base_url=self.config["backend_url"],
                 max_retries=3,
-                timeout=120,
+                timeout=300,
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")

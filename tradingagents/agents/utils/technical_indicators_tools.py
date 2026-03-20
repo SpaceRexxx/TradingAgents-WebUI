@@ -3,7 +3,7 @@ from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
 
 # 最多向 LLM 返回这么多个有效交易日的数据，防止 context 过大导致 API 断连
-_MAX_TRADING_DAYS_TO_RETURN = 20
+_MAX_TRADING_DAYS_TO_RETURN = 10
 
 
 def _truncate_indicator_result(result: str, max_trading_days: int = _MAX_TRADING_DAYS_TO_RETURN) -> str:
@@ -36,7 +36,7 @@ def get_indicators(
     symbol: Annotated[str, "公司的股票代码"],
     indicator: Annotated[str, "需要获取分析和报告的技术指标名称"],
     curr_date: Annotated[str, "你正在进行交易的当前日期, 格式为 yyyy-mm-dd"],
-    look_back_days: Annotated[int, "需要回溯的天数"] = 30,
+    look_back_days: Annotated[int, "需要回溯的天数"] = 15,
 ) -> str:
     """
     检索给定股票代码的技术指标。
@@ -45,7 +45,7 @@ def get_indicators(
         symbol (str): 公司的股票代码, 例如 AAPL, TSM
         indicator (str): 需要获取分析和报告的技术指标名称
         curr_date (str): 你正在进行交易的当前日期, 格式为 yyyy-mm-dd
-        look_back_days (int): 需要回溯的天数, 默认为 30
+        look_back_days (int): 需要回溯的天数, 默认为 15
     返回:
         str: 一个格式化的字符串，包含指定股票代码和指标的技术指标数据。
     """

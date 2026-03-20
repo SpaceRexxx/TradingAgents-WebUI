@@ -320,7 +320,12 @@ def _get_stock_stats_bulk(
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
-            result_dict[date_str] = str(indicator_value)
+            # 这里的指标数值通常很长（15位小数），截断到 4 位足够分析使用且能节省大量 Token
+            try:
+                val = float(indicator_value)
+                result_dict[date_str] = f"{val:.4f}"
+            except (ValueError, TypeError):
+                result_dict[date_str] = str(indicator_value)
     
     return result_dict
 
