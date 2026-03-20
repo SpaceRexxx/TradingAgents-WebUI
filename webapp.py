@@ -256,8 +256,8 @@ with st.sidebar:
     analyst_options = {"市场分析师": AnalystType.MARKET, "社交媒体分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
     selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=list(analyst_options.keys()))
     selected_analysts = [analyst_options[name] for name in selected_analyst_names]
-    depth_options = {"浅层 - 少量辩论": 1, "中等 - 中等辩论": 3, "深入 - 深度辩论": 5}
-    selected_depth_name = st.selectbox("请选择研究深度:", options=list(depth_options.keys()), index=2)
+    depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
+    selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
     provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
     selected_llm_provider_name = st.selectbox("请选择 LLM 提供商:", options=list(provider_options.keys()))
@@ -361,6 +361,15 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
                 progress_placeholder.progress(progress_value, text=progress_text)
                 
+                # 更新调试信息
+                st.session_state.last_chunk_raw = {k: "数据过大已脱敏" if k in ["messages", "market_report", "investment_plan", "trader_investment_plan", "final_trade_decision"] else v for k, v in chunk.items()}
+                
+                # 辩论轮数监控
+                if "risk_debate_state" in chunk:
+                    count = chunk["risk_debate_state"].get("count", 0)
+                    max_turns = 3 * config["max_risk_discuss_rounds"] # 3个 agent
+                    st.toast(f"风险管理辩论进行中: 第 {count} / {max_turns} 次发言")
+                
                 with status_placeholder.container():
                     st.subheader("代理状态")
                     current_sender_name = SENDER_MAP.get(chunk.get("sender"))
@@ -390,12 +399,24 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                     display_live_report(chunk)
         except Exception as e:
             st.error(f"❌ 分析出错: {str(e)}")
+            with st.expander("🔍 错误详细追踪"):
+                import traceback
+                st.code(traceback.format_exc())
             st.warning("⚠️ 提示: 如果这是连接错误，请检查网络；如果是 ValueError，可能是指标名称不合法（现已修复体积/指标大部分兼容性问题）。")
             st.session_state.start_analysis = False
             st.session_state.final_state = final_chunk_for_state
             if st.session_state.previous_sender: 
                 st.session_state.agent_status[st.session_state.previous_sender] = "completed"
             st.button("分析已中断，点击重试", on_click=reset_state)
+        
+        # --- 【新增】调试监控面板 ---
+        st.markdown("---")
+        with st.expander("🛠️ 系统实时运行指标 (调试用)"):
+            st.write("如果你感觉界面长时间不动，可以查看下方原始输出确认后台状态。")
+            if "last_chunk_raw" in st.session_state:
+                st.json(st.session_state.last_chunk_raw)
+            else:
+                st.info("等待分析启动...")
 
 # 2. 分析完成后的视图 (新分析 或 加载的历史)
 elif st.session_state.final_state:
