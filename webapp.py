@@ -291,9 +291,18 @@ with st.sidebar:
     download_placeholder = st.sidebar.empty()
     download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
+    # 【新增】侧边栏调试面板 (始终可见)
+    st.sidebar.markdown("---")
+    st.sidebar.header("🛠️ 调试监控器")
+    with st.sidebar.expander("实时运行指标 (Debug)", expanded=st.session_state.start_analysis):
+        if "last_chunk_raw" in st.session_state:
+            st.write(f"**当前节点:** `{st.session_state.last_chunk_raw.get('sender', '执行中...')}`")
+            st.json(st.session_state.last_chunk_raw)
+        else:
+            st.info("等待分析启动...")
+
     # 【新增】历史记录浏览器
     st.sidebar.markdown("---")
-    st.sidebar.header("📊 历史分析记录")
     historical_analyses = load_historical_analyses(RESULTS_DIR)
     if not historical_analyses:
         st.sidebar.info("暂无历史记录。")
@@ -408,15 +417,6 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             if st.session_state.previous_sender: 
                 st.session_state.agent_status[st.session_state.previous_sender] = "completed"
             st.button("分析已中断，点击重试", on_click=reset_state)
-        
-        # --- 【新增】调试监控面板 ---
-        st.markdown("---")
-        with st.expander("🛠️ 系统实时运行指标 (调试用)"):
-            st.write("如果你感觉界面长时间不动，可以查看下方原始输出确认后台状态。")
-            if "last_chunk_raw" in st.session_state:
-                st.json(st.session_state.last_chunk_raw)
-            else:
-                st.info("等待分析启动...")
 
 # 2. 分析完成后的视图 (新分析 或 加载的历史)
 elif st.session_state.final_state:
