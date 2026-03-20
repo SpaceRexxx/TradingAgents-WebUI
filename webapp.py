@@ -242,11 +242,11 @@ def generate_pdf_report(final_state, ticker, analysis_date):
         css = """body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; } h1 { font-size: 22pt; color: #1E293B; text-align: center; } h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;} h3 { font-size: 13pt; color: #475569; margin-top: 20px;} table { border-collapse: collapse; width: 100%; margin-top: 15px; } th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } th { background-color: #f8fafc; font-weight: bold; }"""
         styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
         
-        # 运行异步的 Playwright
-        pdf_data = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
-        return pdf_data
     except Exception as e:
-        st.error(f"使用 Playwright 生成PDF时发生意外错误: {e}"); import traceback; traceback.print_exc(); return None
+        import traceback
+        error_msg = f"生成 PDF 时导出错误: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        return None
 
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
@@ -389,17 +389,13 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 with report_placeholder.container():
                     display_live_report(chunk)
         except Exception as e:
-            st.error(f"❌ 分析中断 (API 连接错误): {str(e)}")
-            st.info("💡 提示: 这通常是由于 API 响应过长、网络环境不稳定或 API Key 额度不足引起的。我已经优化了请求体积，请尝试再次点击“开始分析”。")
+            st.error(f"❌ 分析出错: {str(e)}")
+            st.warning("⚠️ 提示: 如果这是连接错误，请检查网络；如果是 ValueError，可能是指标名称不合法（现已修复体积/指标大部分兼容性问题）。")
             st.session_state.start_analysis = False
-            st.stop()
             st.session_state.final_state = final_chunk_for_state
             if st.session_state.previous_sender: 
                 st.session_state.agent_status[st.session_state.previous_sender] = "completed"
-            
-            # 【重要】分析刚结束，st.session_state.start_analysis 标志仍然为 True
-            # st.session_state.start_analysis = False # 不要在这里设置 False，留在 "分析完成" 视图中处理
-            st.rerun() # 重跑以进入 "分析完成" 视图
+            st.button("分析已中断，点击重试", on_click=reset_state)
 
 # 2. 分析完成后的视图 (新分析 或 加载的历史)
 elif st.session_state.final_state:
