@@ -3,7 +3,59 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import yfinance as yf
 import os
+import re
 from .stockstats_utils import StockstatsUtils, _clean_dataframe
+
+
+def normalize_ticker(symbol: str) -> str:
+    """将各种中国A股代码格式统一转换为 yfinance 兼容格式。
+    
+    支持的输入格式：
+        SH.600036 / SZ.000001 (中文证券代码格式)
+        600036.SH / 000001.SZ (另一种常见格式)
+        sh600036 / sz000001    (小写连写格式)
+        600036                 (纯数字, 自动推断交易所)
+    
+    输出格式：
+        600036.SS  (上交所 → .SS)
+        000001.SZ  (深交所 → .SZ)
+    """
+    s = symbol.strip()
+    
+    # 格式1: SH.600036 或 SZ.000001
+    m = re.match(r'^(SH|SZ)\.(\d+)$', s, re.IGNORECASE)
+    if m:
+        exchange, code = m.group(1).upper(), m.group(2)
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式2: 600036.SH 或 000001.SZ
+    m = re.match(r'^(\d+)\.(SH|SZ)$', s, re.IGNORECASE)
+    if m:
+        code, exchange = m.group(1), m.group(2).upper()
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式3: sh600036 or sz000001
+    m = re.match(r'^(sh|sz)(\d{6})$', s, re.IGNORECASE)
+    if m:
+        exchange, code = m.group(1).upper(), m.group(2)
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式4: 纯6位数字，按代码段推断交易所
+    # 上交所: 60xxxx (主板A股)、688xxxx (科创板)
+    # 深交所: 00xxxx / 30xxxx / 002xxxx 等
+    m = re.match(r'^(\d{6})$', s)
+    if m:
+        code = m.group(1)
+        if code.startswith(("60", "68")):
+            return f"{code}.SS"
+        else:
+            return f"{code}.SZ"
+
+    # 其他格式（美股、港股等）保持原样
+    return s
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
@@ -13,6 +65,9 @@ def get_YFin_data_online(
 
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
+
+    # 统一转换股票代码格式（支持 SH.600036 等中国A股格式）
+    symbol = normalize_ticker(symbol)
 
     # Create ticker object
     ticker = yf.Ticker(symbol.upper())
@@ -132,6 +187,9 @@ def get_stock_stats_indicators_window(
         raise ValueError(
             f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}"
         )
+
+    # 统一转换股票代码格式（支持 SH.600036 等中国A股格式）
+    symbol = normalize_ticker(symbol)
 
     end_date = curr_date
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -299,6 +357,8 @@ def get_fundamentals(
 ):
     """Get company fundamentals overview from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         info = ticker_obj.info
 
@@ -357,6 +417,8 @@ def get_balance_sheet(
 ):
     """Get balance sheet data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -387,6 +449,8 @@ def get_cashflow(
 ):
     """Get cash flow data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -417,6 +481,8 @@ def get_income_statement(
 ):
     """Get income statement data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -445,6 +511,8 @@ def get_insider_transactions(
 ):
     """Get insider transactions data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         data = ticker_obj.insider_transactions
         
