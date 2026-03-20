@@ -23,10 +23,10 @@ class InvestDebateState(TypedDict):
 
 # 风险管理团队状态
 class RiskDebateState(TypedDict):
-    risky_history: Annotated[
+    aggressive_history: Annotated[
         str, "激进型代理的对话历史"
     ]
-    safe_history: Annotated[
+    conservative_history: Annotated[
         str, "保守型代理的对话历史"
     ]
     neutral_history: Annotated[
@@ -34,10 +34,10 @@ class RiskDebateState(TypedDict):
     ]
     history: Annotated[str, "完整对话历史"]
     latest_speaker: Annotated[str, "上一位发言的分析师"]
-    current_risky_response: Annotated[
+    current_aggressive_response: Annotated[
         str, "激进型分析师的最新回应"
     ]
-    current_safe_response: Annotated[
+    current_conservative_response: Annotated[
         str, "保守型分析师的最新回应"
     ]
     current_neutral_response: Annotated[

@@ -6,11 +6,9 @@ import json
 from datetime import date
 from typing import Dict, Any, Tuple, List, Optional
 
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 from langgraph.prebuilt import ToolNode
+
+from tradingagents.llm_clients import create_llm_client
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -31,7 +29,6 @@ from tradingagents.agents.utils.agent_utils import (
     get_cashflow,
     get_income_statement,
     get_news,
-    get_insider_sentiment,
     get_insider_transactions,
     get_global_news
 )
@@ -51,6 +48,7 @@ class TradingAgentsGraph:
         selected_analysts=["market", "social", "news", "fundamentals"],
         debug=False,
         config: Dict[str, Any] = None,
+        callbacks: Optional[List] = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -58,9 +56,11 @@ class TradingAgentsGraph:
             selected_analysts: List of analyst types to include
             debug: Whether to run in debug mode
             config: Configuration dictionary. If None, uses default config
+            callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
+        self.callbacks = callbacks or []
 
         # ----- START: 诊断打印语句 -----
         print(f"--- [DEBUG] In trading_graph.py: Config provider is '{self.config.get('llm_provider')}', URL is '{self.config.get('backend_url')}' ---")
@@ -115,7 +115,10 @@ class TradingAgentsGraph:
         self.tool_nodes = self._create_tool_nodes()
 
         # Initialize components
-        self.conditional_logic = ConditionalLogic()
+        self.conditional_logic = ConditionalLogic(
+            max_debate_rounds=self.config["max_debate_rounds"],
+            max_risk_discuss_rounds=self.config["max_risk_discuss_rounds"],
+        )
         self.graph_setup = GraphSetup(
             self.quick_thinking_llm,
             self.deep_thinking_llm,
@@ -140,6 +143,23 @@ class TradingAgentsGraph:
         # Set up the graph
         self.graph = self.graph_setup.setup_graph(selected_analysts)
 
+    def _get_provider_kwargs(self) -> Dict[str, Any]:
+        """Get provider-specific kwargs for LLM client creation."""
+        kwargs = {}
+        provider = self.config.get("llm_provider", "").lower()
+
+        if provider == "google":
+            thinking_level = self.config.get("google_thinking_level")
+            if thinking_level:
+                kwargs["thinking_level"] = thinking_level
+
+        elif provider == "openai":
+            reasoning_effort = self.config.get("openai_reasoning_effort")
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+
+        return kwargs
+
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
         return {
@@ -162,7 +182,6 @@ class TradingAgentsGraph:
                     # News and insider information
                     get_news,
                     get_global_news,
-                    get_insider_sentiment,
                     get_insider_transactions,
                 ]
             ),
@@ -234,8 +253,8 @@ class TradingAgentsGraph:
             },
             "trader_investment_decision": final_state["trader_investment_plan"],
             "risk_debate_state": {
-                "risky_history": final_state["risk_debate_state"]["risky_history"],
-                "safe_history": final_state["risk_debate_state"]["safe_history"],
+                "aggressive_history": final_state["risk_debate_state"]["aggressive_history"],
+                "conservative_history": final_state["risk_debate_state"]["conservative_history"],
                 "neutral_history": final_state["risk_debate_state"]["neutral_history"],
                 "history": final_state["risk_debate_state"]["history"],
                 "judge_decision": final_state["risk_debate_state"]["judge_decision"],
@@ -251,6 +270,7 @@ class TradingAgentsGraph:
         with open(
             f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/full_states_log_{trade_date}.json",
             "w",
+            encoding="utf-8",
         ) as f:
             json.dump(self.log_states_dict, f, indent=4)
 
