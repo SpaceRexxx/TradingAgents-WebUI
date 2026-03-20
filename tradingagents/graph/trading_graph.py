@@ -105,12 +105,12 @@ class TradingAgentsGraph:
             trust_env=True    # 信任系统代理
         )
 
-        # 3. 初始化记忆组件 (LongTermMemory 调用时会读取 self.config)
-        self.bull_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="bull_memory", config=self.config)
-        self.bear_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="bear_memory", config=self.config)
-        self.trader_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="trader_memory", config=self.config)
-        self.invest_judge_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="invest_judge_memory", config=self.config)
-        self.risk_manager_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="risk_manager_memory", config=self.config)
+        # 3. 初始化记忆组件 (FinancialSituationMemory 调用时会读取 self.config)
+        self.bull_memory = FinancialSituationMemory(name="bull_memory", config=self.config)
+        self.bear_memory = FinancialSituationMemory(name="bear_memory", config=self.config)
+        self.trader_memory = FinancialSituationMemory(name="trader_memory", config=self.config)
+        self.invest_judge_memory = FinancialSituationMemory(name="invest_judge_memory", config=self.config)
+        self.risk_manager_memory = FinancialSituationMemory(name="risk_manager_memory", config=self.config)
         
         # 4. 初始化 LLM 实例
         provider = self.config["llm_provider"].lower()
