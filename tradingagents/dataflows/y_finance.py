@@ -3,7 +3,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import yfinance as yf
 import os
-from .stockstats_utils import StockstatsUtils
+from .stockstats_utils import StockstatsUtils, _clean_dataframe
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
@@ -209,31 +209,30 @@ def _get_stock_stats_bulk(
                 os.path.join(
                     config.get("data_cache_dir", "data"),
                     f"{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-                )
+                ),
+                on_bad_lines="skip",
             )
-            df = wrap(data)
         except FileNotFoundError:
             raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
     else:
         # Online data fetching with caching
         today_date = pd.Timestamp.today()
         curr_date_dt = pd.to_datetime(curr_date)
-        
+
         end_date = today_date
         start_date = today_date - pd.DateOffset(years=15)
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
-        
+
         os.makedirs(config["data_cache_dir"], exist_ok=True)
-        
+
         data_file = os.path.join(
             config["data_cache_dir"],
             f"{symbol}-YFin-data-{start_date_str}-{end_date_str}.csv",
         )
-        
+
         if os.path.exists(data_file):
-            data = pd.read_csv(data_file)
-            data["Date"] = pd.to_datetime(data["Date"])
+            data = pd.read_csv(data_file, on_bad_lines="skip")
         else:
             data = yf.download(
                 symbol,
@@ -245,9 +244,10 @@ def _get_stock_stats_bulk(
             )
             data = data.reset_index()
             data.to_csv(data_file, index=False)
-        
-        df = wrap(data)
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+
+    data = _clean_dataframe(data)
+    df = wrap(data)
+    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
     
     # Calculate the indicator for all rows at once
     df[indicator]  # This triggers stockstats to calculate the indicator
@@ -291,6 +291,63 @@ def get_stockstats_indicator(
         return ""
 
     return str(indicator_value)
+
+
+def get_fundamentals(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+):
+    """Get company fundamentals overview from yfinance."""
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        info = ticker_obj.info
+
+        if not info:
+            return f"No fundamentals data found for symbol '{ticker}'"
+
+        fields = [
+            ("Name", info.get("longName")),
+            ("Sector", info.get("sector")),
+            ("Industry", info.get("industry")),
+            ("Market Cap", info.get("marketCap")),
+            ("PE Ratio (TTM)", info.get("trailingPE")),
+            ("Forward PE", info.get("forwardPE")),
+            ("PEG Ratio", info.get("pegRatio")),
+            ("Price to Book", info.get("priceToBook")),
+            ("EPS (TTM)", info.get("trailingEps")),
+            ("Forward EPS", info.get("forwardEps")),
+            ("Dividend Yield", info.get("dividendYield")),
+            ("Beta", info.get("beta")),
+            ("52 Week High", info.get("fiftyTwoWeekHigh")),
+            ("52 Week Low", info.get("fiftyTwoWeekLow")),
+            ("50 Day Average", info.get("fiftyDayAverage")),
+            ("200 Day Average", info.get("twoHundredDayAverage")),
+            ("Revenue (TTM)", info.get("totalRevenue")),
+            ("Gross Profit", info.get("grossProfits")),
+            ("EBITDA", info.get("ebitda")),
+            ("Net Income", info.get("netIncomeToCommon")),
+            ("Profit Margin", info.get("profitMargins")),
+            ("Operating Margin", info.get("operatingMargins")),
+            ("Return on Equity", info.get("returnOnEquity")),
+            ("Return on Assets", info.get("returnOnAssets")),
+            ("Debt to Equity", info.get("debtToEquity")),
+            ("Current Ratio", info.get("currentRatio")),
+            ("Book Value", info.get("bookValue")),
+            ("Free Cash Flow", info.get("freeCashflow")),
+        ]
+
+        lines = []
+        for label, value in fields:
+            if value is not None:
+                lines.append(f"{label}: {value}")
+
+        header = f"# Company Fundamentals for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving fundamentals for {ticker}: {str(e)}"
 
 
 def get_balance_sheet(

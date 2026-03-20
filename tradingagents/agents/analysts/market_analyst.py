@@ -80,7 +80,7 @@ MACD 相关指标:
 
         if len(result.tool_calls) == 0:
             report = result.content
-       
+
         return {
             "messages": [result],
             "market_report": report,

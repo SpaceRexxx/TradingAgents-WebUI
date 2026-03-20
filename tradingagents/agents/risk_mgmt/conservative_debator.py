@@ -3,13 +3,13 @@ import time
 import json
 
 
-def create_safe_debator(llm):
-    def safe_node(state) -> dict:
+def create_conservative_debator(llm):
+    def conservative_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = risk_debate_state.get("history", "")
-        safe_history = risk_debate_state.get("safe_history", "")
+        conservative_history = risk_debate_state.get("conservative_history", "")
 
-        current_risky_response = risk_debate_state.get("current_risky_response", "")
+        current_aggressive_response = risk_debate_state.get("current_aggressive_response", "")
         current_neutral_response = risk_debate_state.get("current_neutral_response", "")
 
         market_research_report = state["market_report"]
@@ -30,7 +30,7 @@ def create_safe_debator(llm):
 社交媒体情绪报告: {sentiment_report}
 最新世界动态报告: {news_report}
 公司基本面报告: {fundamentals_report}
-这是当前的对话历史: {history} 这是激进型分析师的最新回应: {current_risky_response} 这是中立型分析师的最新回应: {current_neutral_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
+这是当前的对话历史: {history} 这是激进型分析师的最新回应: {current_aggressive_response} 这是中立型分析师的最新回应: {current_neutral_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
 
 通过质疑他们的乐观态度并强调他们可能忽视的潜在缺点来参与辩论。回应他们的每一个反驳点，以展示为什么保守立场最终是公司资产最安全的路径。专注于辩论和批判他们的论点，以证明低风险策略优于他们的方法。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
@@ -43,14 +43,14 @@ def create_safe_debator(llm):
 
         new_risk_debate_state = {
             "history": history + "\n" + argument,
-            "risky_history": risk_debate_state.get("risky_history", ""),
-            "safe_history": safe_history + "\n" + argument,
+            "aggressive_history": risk_debate_state.get("aggressive_history", ""),
+            "conservative_history": conservative_history + "\n" + argument,
             "neutral_history": risk_debate_state.get("neutral_history", ""),
-            "latest_speaker": "Safe",
-            "current_risky_response": risk_debate_state.get(
-                "current_risky_response", ""
+            "latest_speaker": "Conservative",
+            "current_aggressive_response": risk_debate_state.get(
+                "current_aggressive_response", ""
             ),
-            "current_safe_response": argument,
+            "current_conservative_response": argument,
             "current_neutral_response": risk_debate_state.get(
                 "current_neutral_response", ""
             ),
@@ -59,4 +59,4 @@ def create_safe_debator(llm):
 
         return {"risk_debate_state": new_risk_debate_state,"sender": "Safe Analyst"}
 
-    return safe_node
+    return conservative_node
