@@ -406,6 +406,15 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                     
                 with report_placeholder.container():
                     display_live_report(chunk)
+            
+            # --- 【修复】正常结束后的状态同步 ---
+            if final_chunk_for_state:
+                st.session_state.final_state = final_chunk_for_state
+                # 标记最后一个运行的代理为已完成
+                if st.session_state.previous_sender: 
+                    st.session_state.agent_status[st.session_state.previous_sender] = "completed"
+                st.rerun() # 触发重绘，进入“分析完成”视图
+                
         except Exception as e:
             st.error(f"❌ 分析出错: {str(e)}")
             with st.expander("🔍 错误详细追踪"):
