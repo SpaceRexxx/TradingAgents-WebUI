@@ -33,7 +33,7 @@ TEAMS_STRUCTURE = {
     "分析师团队": ["市场分析师", "社交媒体分析师", "新闻分析师", "基本面分析师"],
     "研究团队": ["多头研究员", "空头研究员", "研究经理"],
     "交易团队": ["交易员"],
-    "风险管理团队": ["激进型分析师", "中立型分析师", "保守型分析师", "投资组合经理"],
+    "风险管理团队": ["激进型分析师", "保守型分析师", "中立型分析师", "投资组合经理"],
 }
 SENDER_MAP = {
     "Market Analyst": "市场分析师", "News Analyst": "新闻分析师",
@@ -244,7 +244,7 @@ def generate_pdf_report(final_state, ticker, analysis_date):
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
     st.header("分析配置")
-    selected_ticker = st.text_input("请输入股票代码:", value="AAPL").upper()
+    selected_ticker = st.text_input("请输入股票代码:", value="").upper()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
     analyst_options = {"市场分析师": AnalystType.MARKET, "社交媒体分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
     selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=list(analyst_options.keys()))
