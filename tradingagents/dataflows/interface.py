@@ -11,6 +11,8 @@ from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
 from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+from .local import get_reddit_global_news, get_finnhub_company_insider_sentiment
+from .openai import get_global_news_openai
 from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
     get_indicator as get_alpha_vantage_indicator,
