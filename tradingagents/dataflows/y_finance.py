@@ -186,6 +186,11 @@ def get_stock_stats_indicators_window(
             "Usage: Confirms the strength of a price move. High volume on a breakout suggests conviction. "
             "Tips: Volume precedes price; watch for volume spikes relative to average levels."
         ),
+        "obv": (
+            "OBV: On-Balance Volume is a momentum indicator that uses volume flow to predict changes in stock price. "
+            "Usage: Look for divergence between OBV and price; confirmation of price trends by rising/falling OBV. "
+            "Tips: OBV is a cumulative total; focus on the direction of the OBV line rather than its absolute value."
+        ),
     }
 
     # 别名映射：将 AI 常用的通用名称映射到我们的规范名称
@@ -197,7 +202,9 @@ def get_stock_stats_indicators_window(
         "ema": "close_10_ema",
         "moving_average": "close_50_sma",
         "volumes": "volume",
-        "trading_volume": "volume"
+        "trading_volume": "volume",
+        "on_balance_volume": "obv",
+        "on-balance_volume": "obv"
     }
     
     indicator = indicator.strip().lower()
