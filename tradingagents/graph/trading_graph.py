@@ -6,6 +6,15 @@ import json
 from datetime import date
 from typing import Dict, Any, Tuple, List, Optional
 
+# 自动加载项目根目录的 .env 文件，确保 API Key 在各种启动方式下都可用
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent.parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
 from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
