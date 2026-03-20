@@ -53,19 +53,15 @@ class FinancialSituationMemory:
 
             print(f"--- [DEBUG] Memory: Using API Key starting with '{str(api_key_to_use)[:6]}', Model='{model_name_to_use}', URL='{backend_url}' ---")
 
-            original_base_url = openai.base_url
-            original_api_key = openai.api_key
-            try:
-                openai.base_url = backend_url
-                openai.api_key = api_key_to_use
-                
-                embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-                    api_key=api_key_to_use, 
-                    model_name=model_name_to_use
-                )
-            finally:
-                openai.base_url = original_base_url
-                openai.api_key = original_api_key
+            # 关键：避免直接修改 openai.base_url 全局变量，直接传参给函数。
+            # 如果 backend_url 包含 /v1 路径，OpenAIEmbeddingFunction 内部通常能处理好，
+            # 但为了极致稳定性，我们手动管理 api_base 参数。
+            
+            embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key_to_use, 
+                api_base=backend_url, # 直接局部注入 API 地址
+                model_name=model_name_to_use
+            )
         
         # --- 逻辑结束 ---
 

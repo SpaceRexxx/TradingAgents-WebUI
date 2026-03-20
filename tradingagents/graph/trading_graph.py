@@ -78,6 +78,17 @@ class TradingAgentsGraph:
         print(f"--- [DEBUG] In trading_graph.py: Config provider is '{self.config.get('llm_provider')}', URL is '{self.config.get('backend_url')}' ---")
         # ----- END OF DIAGNOSTIC PRINT -----
 
+        # 1. 全局 URL 清洗：确保所有组件（如 Memory）都使用正确的地址
+        provider = self.config.get("llm_provider", "").lower()
+        if provider == "deepseek":
+            b_url = self.config.get("backend_url", "")
+            # 统一移除 /v1 后缀，DeepSeek 官方库会自动处理路径拼接
+            if b_url.endswith("/v1") or b_url.endswith("/v1/"):
+                cleaned_url = b_url.replace("/v1", "").rstrip("/")
+                self.config["backend_url"] = cleaned_url
+                if self.debug:
+                    print(f"--- [DEBUG] Sanitized DeepSeek URL to: {cleaned_url} ---")
+
         # Update the interface's config
         set_config(self.config)
 
@@ -87,7 +98,21 @@ class TradingAgentsGraph:
             exist_ok=True,
         )
 
-        # Initialize LLMs
+        # 2. 初始化网络客户端：禁用 HTTP/2 以解决与部分代理环境的冲突
+        import httpx
+        custom_client = httpx.Client(
+            http2=False,      # 关键：禁用 HTTP/2
+            trust_env=True    # 信任系统代理
+        )
+
+        # 3. 初始化记忆组件 (LongTermMemory 调用时会读取 self.config)
+        self.bull_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="bull_memory", config=self.config)
+        self.bear_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="bear_memory", config=self.config)
+        self.trader_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="trader_memory", config=self.config)
+        self.invest_judge_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="invest_judge_memory", config=self.config)
+        self.risk_manager_memory = LongTermMemory(provider="deepseek", model_name="deepseek-text-embedding-v2", memory_id="risk_manager_memory", config=self.config)
+        
+        # 4. 初始化 LLM 实例
         provider = self.config["llm_provider"].lower()
         
         if provider in ["openai", "ollama", "openrouter"]:
@@ -96,14 +121,17 @@ class TradingAgentsGraph:
                 base_url=self.config["backend_url"],
                 max_retries=3,
                 timeout=300,
+                http_client=custom_client,
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
                 base_url=self.config["backend_url"],
                 max_retries=3,
                 timeout=300,
+                http_client=custom_client,
             )
         elif provider == "anthropic":
+            # Anthropic 使用不同的客户端实现，暂时保持默认
             self.deep_thinking_llm = ChatAnthropic(
                 model=self.config["deep_think_llm"],
                 base_url=self.config["backend_url"],
@@ -124,11 +152,8 @@ class TradingAgentsGraph:
             if not api_key:
                 raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
             
-            # DeepSeek 官方推荐 base_url 是 https://api.deepseek.com
-            # 如果末尾有 /v1，库内部拼接时可能会出问题，这里做一下处理
+            # 使用已清洗的 URL
             b_url = self.config["backend_url"]
-            if b_url.endswith("/v1") or b_url.endswith("/v1/"):
-                b_url = b_url.replace("/v1", "").rstrip("/")
 
             self.deep_thinking_llm = ChatOpenAI(
                 model=self.config["deep_think_llm"],
@@ -136,6 +161,7 @@ class TradingAgentsGraph:
                 base_url=b_url,
                 max_retries=5,    # 增加重试次数
                 timeout=900,      # 对于深度思考 (Reasoner) 模型，响应可能非常慢，给足 15 分钟
+                http_client=custom_client,
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
@@ -143,6 +169,7 @@ class TradingAgentsGraph:
                 base_url=b_url,
                 max_retries=5,
                 timeout=900,
+                http_client=custom_client,
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
