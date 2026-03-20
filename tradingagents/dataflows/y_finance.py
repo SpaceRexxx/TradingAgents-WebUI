@@ -181,6 +181,11 @@ def get_stock_stats_indicators_window(
             "Usage: Identify overbought (>80) or oversold (<20) conditions and confirm the strength of trends or reversals. "
             "Tips: Use alongside RSI or MACD to confirm signals; divergence between price and MFI can indicate potential reversals."
         ),
+        "volume": (
+            "Volume: The number of shares traded during a given period. "
+            "Usage: Confirms the strength of a price move. High volume on a breakout suggests conviction. "
+            "Tips: Volume precedes price; watch for volume spikes relative to average levels."
+        ),
     }
 
     if indicator not in best_ind_params:
