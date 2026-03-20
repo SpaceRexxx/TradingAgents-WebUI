@@ -48,6 +48,20 @@ class FinancialSituationMemory:
                 model_name_to_use = "deepseek-text-embedding-v2"
                 if not api_key_to_use:
                     raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
+            elif "nvidia.com" in backend_url:
+                print("--- [DEBUG] Memory: Specifically identified NVIDIA. ---")
+                api_key_to_use = os.environ.get("NVIDIA_API_KEY")
+                # NVIDIA NIM 常用嵌入模型，如果用户没配，我们可以尝试降级或使用一个默认名
+                model_name_to_use = "nvidia/nv-embedqa-e5-v5" 
+                if not api_key_to_use:
+                    # 尝试降级使用 OpenAI Key（如果用户配置了混合模式）
+                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if api_key_to_use:
+                        print("--- [DEBUG] Memory: NVIDIA Key missing, falling back to OpenAI Key for Embeddings. ---")
+                        backend_url = "https://api.openai.com/v1" # 重定向嵌入请求到 OpenAI
+                        model_name_to_use = "text-embedding-3-small"
+                    else:
+                        raise ValueError("NVIDIA_API_KEY (and OPENAI_API_KEY fallback) not set for NVIDIA provider.")
             else: # Default to OpenAI key for others
                 api_key_to_use = os.environ.get("OPENAI_API_KEY")
 
