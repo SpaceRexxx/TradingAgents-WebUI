@@ -188,6 +188,22 @@ def get_stock_stats_indicators_window(
         ),
     }
 
+    # 别名映射：将 AI 常用的通用名称映射到我们的规范名称
+    alias_map = {
+        "bollinger_bands": "boll",
+        "bollinger": "boll",
+        "bb": "boll",
+        "sma": "close_50_sma",
+        "ema": "close_10_ema",
+        "moving_average": "close_50_sma",
+        "volumes": "volume",
+        "trading_volume": "volume"
+    }
+    
+    indicator = indicator.strip().lower()
+    if indicator in alias_map:
+        indicator = alias_map[indicator]
+
     if indicator not in best_ind_params:
         raise ValueError(
             f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}"
