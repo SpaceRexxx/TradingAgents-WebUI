@@ -242,6 +242,11 @@ def generate_pdf_report(final_state, ticker, analysis_date):
         css = """body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; } h1 { font-size: 22pt; color: #1E293B; text-align: center; } h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;} h3 { font-size: 13pt; color: #475569; margin-top: 20px;} table { border-collapse: collapse; width: 100%; margin-top: 15px; } th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } th { background-color: #f8fafc; font-weight: bold; }"""
         styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
         
+        # 调用异步方法生成 PDF 字节流
+        import asyncio
+        pdf_bytes = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
+        return pdf_bytes
+        
     except Exception as e:
         import traceback
         error_msg = f"生成 PDF 时导出错误: {str(e)}\n{traceback.format_exc()}"
@@ -300,11 +305,22 @@ with st.sidebar:
         
     st.sidebar.markdown("---")
     st.sidebar.header("下载报告")
-    # --- 【重构】下载按钮逻辑 ---
-    # 我们先在侧边栏放置一个 empty 容器。
-    # 真正的下载按钮将在下方主体逻辑（PDF生成或加载后）向这个容器中注入。
     download_placeholder = st.sidebar.empty()
-    download_placeholder.info("分析完成后，将在此处提供下载链接。")
+    if st.session_state.current_analysis_paths and 'pdf' in st.session_state.current_analysis_paths:
+        pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
+        if pdf_path.exists():
+            with open(pdf_path, "rb") as f:
+                st.sidebar.download_button(
+                    label="📂 下载 PDF 完整报告",
+                    data=f.read(),
+                    file_name=f"TradingAgents_Report_{selected_ticker}_{analysis_date}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        else:
+            download_placeholder.info("分析已准备好下载，但 PDF 文件暂不可用。")
+    else:
+        download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
     # 【新增】侧边栏调试面板 (始终可见)
     st.sidebar.markdown("---")
@@ -479,26 +495,17 @@ elif st.session_state.final_state:
             
     # 【修改】下载按钮逻辑
     pdf_data = None
-    file_name_for_download = f"TradingAgents_Report_{ticker_from_state}_{date_from_state}.pdf"
-    
-    # 场景 A: 检查是否是刚加载的历史记录
-    if st.session_state.current_analysis_paths and 'pdf' in st.session_state.current_analysis_paths:
+    # 检查是否是刚加载的历史记录
+    if st.session_state.current_analysis_paths:
         pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
         if pdf_path.exists():
-            with open(pdf_path, "rb") as f:
-                pdf_data = f.read()
-            download_placeholder.empty() # 清除 info
-            download_placeholder.download_button(
-                label="📄 下载完整PDF报告",
-                data=pdf_data,
-                file_name=file_name_for_download,
-                mime="application/pdf",
-                use_container_width=True
-            )
+            with st.spinner(f"正在加载已保存的 PDF: {pdf_path.name}..."):
+                with open(pdf_path, "rb") as f:
+                    pdf_data = f.read()
         else:
             download_placeholder.error(f"错误: 未找到已保存的 PDF 文件于 {pdf_path}")
             
-    # 场景 B: 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
+    # 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
     elif st.session_state.start_analysis:
         with st.spinner("正在生成并保存 PDF 报告... (这可能需要一点时间)"):
             pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
@@ -508,35 +515,21 @@ elif st.session_state.final_state:
                 config_for_saving.update({"results_dir": str(RESULTS_DIR)})
                 save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
                 st.toast("分析结果已保存到磁盘！")
-                
-                # 生成完毕后，立即向侧边栏注入按钮！
-                download_placeholder.empty()
-                download_placeholder.download_button(
-                    label="📄 下载完整PDF报告",
-                    data=pdf_data,
-                    file_name=file_name_for_download,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-        # 【重要】清除标志，防止重复保存和无限循环
+        # 【重要】清除标志，防止重复保存
         st.session_state.start_analysis = False 
-    
-    # 场景 C: 页面的后续重新刷新（已有 final_state 但 start_analysis 为 False，且不是从历史加载的）
-    # 此时我们需要从刚保存的文件中重新读取数据以维持按钮存在。
-    elif not st.session_state.current_analysis_paths and not st.session_state.start_analysis:
-         # 尝试预测刚刚保存的 PDF 路径
-         predicted_pdf_path = RESULTS_DIR / ticker_from_state / f"report_{date_from_state}.pdf"
-         if predicted_pdf_path.exists():
-             with open(predicted_pdf_path, "rb") as f:
-                 pdf_data = f.read()
-             download_placeholder.empty()
-             download_placeholder.download_button(
-                 label="📄 下载完整PDF报告",
-                 data=pdf_data,
-                 file_name=file_name_for_download,
-                 mime="application/pdf",
-                 use_container_width=True
-             )
+            
+    # 显示下载按钮
+    if pdf_data:
+        download_placeholder.download_button(
+            label="📄 下载完整PDF报告",
+            data=pdf_data,
+            file_name=f"TradingAgents_Report_{ticker_from_state}_{date_from_state}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    else:
+        # 这是一个捕获逻辑，如果既不是新分析也不是加载的，则不显示按钮
+        download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
 # 3. 初始欢迎屏幕
 else:
