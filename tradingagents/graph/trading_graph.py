@@ -6,11 +6,21 @@ import json
 from datetime import date
 from typing import Dict, Any, Tuple, List, Optional
 
+# 自动加载项目根目录的 .env 文件，确保 API Key 在各种启动方式下都可用
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent.parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
+from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from langgraph.prebuilt import ToolNode
+from tradingagents.llm_clients import create_llm_client
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -31,7 +41,6 @@ from tradingagents.agents.utils.agent_utils import (
     get_cashflow,
     get_income_statement,
     get_news,
-    get_insider_sentiment,
     get_insider_transactions,
     get_global_news
 )
@@ -51,6 +60,7 @@ class TradingAgentsGraph:
         selected_analysts=["market", "social", "news", "fundamentals"],
         debug=False,
         config: Dict[str, Any] = None,
+        callbacks: Optional[List] = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -58,13 +68,26 @@ class TradingAgentsGraph:
             selected_analysts: List of analyst types to include
             debug: Whether to run in debug mode
             config: Configuration dictionary. If None, uses default config
+            callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
+        self.callbacks = callbacks or []
 
         # ----- START: 诊断打印语句 -----
         print(f"--- [DEBUG] In trading_graph.py: Config provider is '{self.config.get('llm_provider')}', URL is '{self.config.get('backend_url')}' ---")
         # ----- END OF DIAGNOSTIC PRINT -----
+
+        # 1. 全局 URL 清洗：确保所有组件（如 Memory）都使用正确的地址
+        provider = self.config.get("llm_provider", "").lower()
+        if provider == "deepseek":
+            b_url = self.config.get("backend_url", "")
+            # 统一移除 /v1 后缀，DeepSeek 官方库会自动处理路径拼接
+            if b_url.endswith("/v1") or b_url.endswith("/v1/"):
+                cleaned_url = b_url.replace("/v1", "").rstrip("/")
+                self.config["backend_url"] = cleaned_url
+                if self.debug:
+                    print(f"--- [DEBUG] Sanitized DeepSeek URL to: {cleaned_url} ---")
 
         # Update the interface's config
         set_config(self.config)
@@ -75,31 +98,177 @@ class TradingAgentsGraph:
             exist_ok=True,
         )
 
-        # Initialize LLMs
+        # 2. 初始化网络客户端：禁用 HTTP/2 且不信任环境代理
+        import httpx
+        # 特别针对 macOS：显式禁用 trust_env，防止 httpx 读取可能导致冲突的系统代理设置
+        custom_client = httpx.Client(
+            http2=False,                          # 禁用 http2
+            trust_env=False,                      # 关键：不读取系统代理，避免隐形干扰
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        )
+
+        # 3. 初始化记忆组件 (FinancialSituationMemory 调用时会读取 self.config)
+        self.bull_memory = FinancialSituationMemory(name="bull_memory", config=self.config)
+        self.bear_memory = FinancialSituationMemory(name="bear_memory", config=self.config)
+        self.trader_memory = FinancialSituationMemory(name="trader_memory", config=self.config)
+        self.invest_judge_memory = FinancialSituationMemory(name="invest_judge_memory", config=self.config)
+        self.risk_manager_memory = FinancialSituationMemory(name="risk_manager_memory", config=self.config)
+        
+        # 4. 初始化 LLM 实例
         provider = self.config["llm_provider"].lower()
         
         if provider in ["openai", "ollama", "openrouter"]:
-            self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                max_retries=3,
+                timeout=300,
+                http_client=custom_client,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                max_retries=3,
+                timeout=300,
+                http_client=custom_client,
+            )
         elif provider == "anthropic":
-            self.deep_thinking_llm = ChatAnthropic(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatAnthropic(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
+            # Anthropic 使用不同的客户端实现，暂时保持默认
+            self.deep_thinking_llm = ChatAnthropic(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                max_retries=3,
+                timeout=300,
+            )
+            self.quick_thinking_llm = ChatAnthropic(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                max_retries=3,
+                timeout=300,
+            )
         elif provider == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
             self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
-        elif provider == "deepseek":
-            api_key = os.environ.get("DEEPSEEK_API_KEY")
+        # --- [DEBUG] In trading_graph.py: Config provider is '{self.config.get("llm_provider")}', URL is '{self.config.get("backend_url")}' ---
+        
+        # 鲁棒性改进：提取核心 provider 标识（例如将 "火山引擎 (Volcengine)" 识别为 "volcengine"）
+        provider_full = str(self.config.get("llm_provider", "")).lower()
+        fixed_provider = "openai" # 默认值
+        if "volcengine" in provider_full:
+            fixed_provider = "volcengine"
+        elif "nvidia" in provider_full:
+            fixed_provider = "nvidia"
+        elif "deepseek" in provider_full:
+            fixed_provider = "deepseek"
+        elif "google" in provider_full:
+            fixed_provider = "google"
+        elif "openai" in provider_full:
+            fixed_provider = "openai"
+        elif "anthropic" in provider_full:
+            fixed_provider = "anthropic"
+
+        if fixed_provider == "openai":
+            api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY")
             if not api_key:
-                raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
+                raise ValueError("OPENAI_API_KEY / api_key not provided.")
+            
+            # 使用配置中的 URL
+            b_url = self.config.get("backend_url", "https://api.openai.com/v1")
+
             self.deep_thinking_llm = ChatOpenAI(
                 model=self.config["deep_think_llm"],
                 api_key=api_key,
-                base_url=self.config["backend_url"]
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
             )
             self.quick_thinking_llm = ChatOpenAI(
                 model=self.config["quick_think_llm"],
                 api_key=api_key,
-                base_url=self.config["backend_url"]
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "deepseek":
+            api_key = self.config.get("api_key") or os.environ.get("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError("DEEPSEEK_API_KEY / api_key not provided.")
+            
+            # 使用已清洗的 URL
+            b_url = self.config["backend_url"]
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "nvidia":
+            api_key = self.config.get("api_key") or os.environ.get("NVIDIA_API_KEY")
+            if not api_key:
+                api_key = self.config.get("nvidia_api_key")
+            if not api_key:
+                raise ValueError("NVIDIA API Key not provided.")
+            
+            b_url = "https://integrate.api.nvidia.com/v1"
+            
+            model_kwargs = {}
+            if "deepseek" in self.config["deep_think_llm"].lower():
+                model_kwargs["chat_template_kwargs"] = {"thinking": True}
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+                model_kwargs=model_kwargs
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "volcengine":
+            api_key = self.config.get("api_key") or os.environ.get("ARK_API_KEY")
+            if not api_key:
+                api_key = self.config.get("ark_api_key")
+            if not api_key:
+                raise ValueError("ARK API Key not provided.")
+            
+            b_url = "https://ark.cn-beijing.volces.com/api/v3"
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
@@ -115,7 +284,10 @@ class TradingAgentsGraph:
         self.tool_nodes = self._create_tool_nodes()
 
         # Initialize components
-        self.conditional_logic = ConditionalLogic()
+        self.conditional_logic = ConditionalLogic(
+            max_debate_rounds=self.config["max_debate_rounds"],
+            max_risk_discuss_rounds=self.config["max_risk_discuss_rounds"],
+        )
         self.graph_setup = GraphSetup(
             self.quick_thinking_llm,
             self.deep_thinking_llm,
@@ -140,6 +312,23 @@ class TradingAgentsGraph:
         # Set up the graph
         self.graph = self.graph_setup.setup_graph(selected_analysts)
 
+    def _get_provider_kwargs(self) -> Dict[str, Any]:
+        """Get provider-specific kwargs for LLM client creation."""
+        kwargs = {}
+        provider = self.config.get("llm_provider", "").lower()
+
+        if provider == "google":
+            thinking_level = self.config.get("google_thinking_level")
+            if thinking_level:
+                kwargs["thinking_level"] = thinking_level
+
+        elif provider == "openai":
+            reasoning_effort = self.config.get("openai_reasoning_effort")
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+
+        return kwargs
+
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
         return {
@@ -162,7 +351,6 @@ class TradingAgentsGraph:
                     # News and insider information
                     get_news,
                     get_global_news,
-                    get_insider_sentiment,
                     get_insider_transactions,
                 ]
             ),
@@ -234,8 +422,8 @@ class TradingAgentsGraph:
             },
             "trader_investment_decision": final_state["trader_investment_plan"],
             "risk_debate_state": {
-                "risky_history": final_state["risk_debate_state"]["risky_history"],
-                "safe_history": final_state["risk_debate_state"]["safe_history"],
+                "aggressive_history": final_state["risk_debate_state"]["aggressive_history"],
+                "conservative_history": final_state["risk_debate_state"]["conservative_history"],
                 "neutral_history": final_state["risk_debate_state"]["neutral_history"],
                 "history": final_state["risk_debate_state"]["history"],
                 "judge_decision": final_state["risk_debate_state"]["judge_decision"],
@@ -251,6 +439,7 @@ class TradingAgentsGraph:
         with open(
             f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/full_states_log_{trade_date}.json",
             "w",
+            encoding="utf-8",
         ) as f:
             json.dump(self.log_states_dict, f, indent=4)
 

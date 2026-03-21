@@ -2,13 +2,13 @@ import time
 import json
 
 
-def create_risky_debator(llm):
-    def risky_node(state) -> dict:
+def create_aggressive_debator(llm):
+    def aggressive_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = risk_debate_state.get("history", "")
-        risky_history = risk_debate_state.get("risky_history", "")
+        aggressive_history = risk_debate_state.get("aggressive_history", "")
 
-        current_safe_response = risk_debate_state.get("current_safe_response", "")
+        current_conservative_response = risk_debate_state.get("current_conservative_response", "")
         current_neutral_response = risk_debate_state.get("current_neutral_response", "")
 
         market_research_report = state["market_report"]
@@ -29,7 +29,7 @@ def create_risky_debator(llm):
 社交媒体情绪报告: {sentiment_report}
 最新世界动态报告: {news_report}
 公司基本面报告: {fundamentals_report}
-这是当前的对话历史: {history} 这是保守型分析师的最新论点: {current_safe_response} 这是中立型分析师的最新论点: {current_neutral_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
+这是当前的对话历史: {history} 这是保守型分析师的最新论点: {current_conservative_response} 这是中立型分析师的最新论点: {current_neutral_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
 
 通过解决提出的任何具体担忧，反驳他们逻辑中的弱点，并断言冒险能带来超越市场常规的好处来积极参与。保持专注于辩论和说服，而不仅仅是呈现数据。挑战每一个反驳点，以强调为什么高风险方法是最佳选择。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
@@ -42,12 +42,12 @@ def create_risky_debator(llm):
 
         new_risk_debate_state = {
             "history": history + "\n" + argument,
-            "risky_history": risky_history + "\n" + argument,
-            "safe_history": risk_debate_state.get("safe_history", ""),
+            "aggressive_history": aggressive_history + "\n" + argument,
+            "conservative_history": risk_debate_state.get("conservative_history", ""),
             "neutral_history": risk_debate_state.get("neutral_history", ""),
-            "latest_speaker": "Risky",
-            "current_risky_response": argument,
-            "current_safe_response": risk_debate_state.get("current_safe_response", ""),
+            "latest_speaker": "Aggressive",
+            "current_aggressive_response": argument,
+            "current_conservative_response": risk_debate_state.get("current_conservative_response", ""),
             "current_neutral_response": risk_debate_state.get(
                 "current_neutral_response", ""
             ),
@@ -56,4 +56,4 @@ def create_risky_debator(llm):
 
         return {"risk_debate_state": new_risk_debate_state, "sender": "Risky Analyst"}
 
-    return risky_node
+    return aggressive_node

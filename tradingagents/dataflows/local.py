@@ -1,12 +1,16 @@
 from typing import Annotated
 import pandas as pd
 import os
-from .config import DATA_DIR
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import json
 from .reddit_utils import fetch_top_from_category
 from tqdm import tqdm
+
+# DATA_DIR 在旧版 config.py 中作为常量导出，新版改为动态配置。
+# 这里从 DEFAULT_CONFIG 中读取 data_cache_dir 作为数据根目录。
+import tradingagents.default_config as _default_cfg
+DATA_DIR = _default_cfg.DEFAULT_CONFIG.get("data_cache_dir", os.path.join(os.path.dirname(__file__), "data_cache"))
 
 def get_YFin_data_window(
     symbol: Annotated[str, "ticker symbol of the company"],

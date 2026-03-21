@@ -3,7 +3,59 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import yfinance as yf
 import os
-from .stockstats_utils import StockstatsUtils
+import re
+from .stockstats_utils import StockstatsUtils, _clean_dataframe
+
+
+def normalize_ticker(symbol: str) -> str:
+    """将各种中国A股代码格式统一转换为 yfinance 兼容格式。
+    
+    支持的输入格式：
+        SH.600036 / SZ.000001 (中文证券代码格式)
+        600036.SH / 000001.SZ (另一种常见格式)
+        sh600036 / sz000001    (小写连写格式)
+        600036                 (纯数字, 自动推断交易所)
+    
+    输出格式：
+        600036.SS  (上交所 → .SS)
+        000001.SZ  (深交所 → .SZ)
+    """
+    s = symbol.strip()
+    
+    # 格式1: SH.600036 或 SZ.000001
+    m = re.match(r'^(SH|SZ)\.(\d+)$', s, re.IGNORECASE)
+    if m:
+        exchange, code = m.group(1).upper(), m.group(2)
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式2: 600036.SH 或 000001.SZ
+    m = re.match(r'^(\d+)\.(SH|SZ)$', s, re.IGNORECASE)
+    if m:
+        code, exchange = m.group(1), m.group(2).upper()
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式3: sh600036 or sz000001
+    m = re.match(r'^(sh|sz)(\d{6})$', s, re.IGNORECASE)
+    if m:
+        exchange, code = m.group(1).upper(), m.group(2)
+        suffix = "SS" if exchange == "SH" else "SZ"
+        return f"{code}.{suffix}"
+
+    # 格式4: 纯6位数字，按代码段推断交易所
+    # 上交所: 60xxxx (主板A股)、688xxxx (科创板)
+    # 深交所: 00xxxx / 30xxxx / 002xxxx 等
+    m = re.match(r'^(\d{6})$', s)
+    if m:
+        code = m.group(1)
+        if code.startswith(("60", "68")):
+            return f"{code}.SS"
+        else:
+            return f"{code}.SZ"
+
+    # 其他格式（美股、港股等）保持原样
+    return s
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
@@ -13,6 +65,9 @@ def get_YFin_data_online(
 
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
+
+    # 统一转换股票代码格式（支持 SH.600036 等中国A股格式）
+    symbol = normalize_ticker(symbol)
 
     # Create ticker object
     ticker = yf.Ticker(symbol.upper())
@@ -126,12 +181,43 @@ def get_stock_stats_indicators_window(
             "Usage: Identify overbought (>80) or oversold (<20) conditions and confirm the strength of trends or reversals. "
             "Tips: Use alongside RSI or MACD to confirm signals; divergence between price and MFI can indicate potential reversals."
         ),
+        "volume": (
+            "Volume: The number of shares traded during a given period. "
+            "Usage: Confirms the strength of a price move. High volume on a breakout suggests conviction. "
+            "Tips: Volume precedes price; watch for volume spikes relative to average levels."
+        ),
+        "obv": (
+            "OBV: On-Balance Volume is a momentum indicator that uses volume flow to predict changes in stock price. "
+            "Usage: Look for divergence between OBV and price; confirmation of price trends by rising/falling OBV. "
+            "Tips: OBV is a cumulative total; focus on the direction of the OBV line rather than its absolute value."
+        ),
     }
+
+    # 别名映射：将 AI 常用的通用名称映射到我们的规范名称
+    alias_map = {
+        "bollinger_bands": "boll",
+        "bollinger": "boll",
+        "bb": "boll",
+        "sma": "close_50_sma",
+        "ema": "close_10_ema",
+        "moving_average": "close_50_sma",
+        "volumes": "volume",
+        "trading_volume": "volume",
+        "on_balance_volume": "obv",
+        "on-balance_volume": "obv"
+    }
+    
+    indicator = indicator.strip().lower()
+    if indicator in alias_map:
+        indicator = alias_map[indicator]
 
     if indicator not in best_ind_params:
         raise ValueError(
             f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}"
         )
+
+    # 统一转换股票代码格式（支持 SH.600036 等中国A股格式）
+    symbol = normalize_ticker(symbol)
 
     end_date = curr_date
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -209,31 +295,30 @@ def _get_stock_stats_bulk(
                 os.path.join(
                     config.get("data_cache_dir", "data"),
                     f"{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-                )
+                ),
+                on_bad_lines="skip",
             )
-            df = wrap(data)
         except FileNotFoundError:
             raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
     else:
         # Online data fetching with caching
         today_date = pd.Timestamp.today()
         curr_date_dt = pd.to_datetime(curr_date)
-        
+
         end_date = today_date
         start_date = today_date - pd.DateOffset(years=15)
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
-        
+
         os.makedirs(config["data_cache_dir"], exist_ok=True)
-        
+
         data_file = os.path.join(
             config["data_cache_dir"],
             f"{symbol}-YFin-data-{start_date_str}-{end_date_str}.csv",
         )
-        
+
         if os.path.exists(data_file):
-            data = pd.read_csv(data_file)
-            data["Date"] = pd.to_datetime(data["Date"])
+            data = pd.read_csv(data_file, on_bad_lines="skip")
         else:
             data = yf.download(
                 symbol,
@@ -245,9 +330,10 @@ def _get_stock_stats_bulk(
             )
             data = data.reset_index()
             data.to_csv(data_file, index=False)
-        
-        df = wrap(data)
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+
+    data = _clean_dataframe(data)
+    df = wrap(data)
+    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
     
     # Calculate the indicator for all rows at once
     df[indicator]  # This triggers stockstats to calculate the indicator
@@ -262,7 +348,12 @@ def _get_stock_stats_bulk(
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
-            result_dict[date_str] = str(indicator_value)
+            # 这里的指标数值通常很长（15位小数），截断到 4 位足够分析使用且能节省大量 Token
+            try:
+                val = float(indicator_value)
+                result_dict[date_str] = f"{val:.4f}"
+            except (ValueError, TypeError):
+                result_dict[date_str] = str(indicator_value)
     
     return result_dict
 
@@ -293,6 +384,65 @@ def get_stockstats_indicator(
     return str(indicator_value)
 
 
+def get_fundamentals(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+):
+    """Get company fundamentals overview from yfinance."""
+    try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
+        ticker_obj = yf.Ticker(ticker.upper())
+        info = ticker_obj.info
+
+        if not info:
+            return f"No fundamentals data found for symbol '{ticker}'"
+
+        fields = [
+            ("Name", info.get("longName")),
+            ("Sector", info.get("sector")),
+            ("Industry", info.get("industry")),
+            ("Market Cap", info.get("marketCap")),
+            ("PE Ratio (TTM)", info.get("trailingPE")),
+            ("Forward PE", info.get("forwardPE")),
+            ("PEG Ratio", info.get("pegRatio")),
+            ("Price to Book", info.get("priceToBook")),
+            ("EPS (TTM)", info.get("trailingEps")),
+            ("Forward EPS", info.get("forwardEps")),
+            ("Dividend Yield", info.get("dividendYield")),
+            ("Beta", info.get("beta")),
+            ("52 Week High", info.get("fiftyTwoWeekHigh")),
+            ("52 Week Low", info.get("fiftyTwoWeekLow")),
+            ("50 Day Average", info.get("fiftyDayAverage")),
+            ("200 Day Average", info.get("twoHundredDayAverage")),
+            ("Revenue (TTM)", info.get("totalRevenue")),
+            ("Gross Profit", info.get("grossProfits")),
+            ("EBITDA", info.get("ebitda")),
+            ("Net Income", info.get("netIncomeToCommon")),
+            ("Profit Margin", info.get("profitMargins")),
+            ("Operating Margin", info.get("operatingMargins")),
+            ("Return on Equity", info.get("returnOnEquity")),
+            ("Return on Assets", info.get("returnOnAssets")),
+            ("Debt to Equity", info.get("debtToEquity")),
+            ("Current Ratio", info.get("currentRatio")),
+            ("Book Value", info.get("bookValue")),
+            ("Free Cash Flow", info.get("freeCashflow")),
+        ]
+
+        lines = []
+        for label, value in fields:
+            if value is not None:
+                lines.append(f"{label}: {value}")
+
+        header = f"# Company Fundamentals for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving fundamentals for {ticker}: {str(e)}"
+
+
 def get_balance_sheet(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
@@ -300,6 +450,8 @@ def get_balance_sheet(
 ):
     """Get balance sheet data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -330,6 +482,8 @@ def get_cashflow(
 ):
     """Get cash flow data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -360,6 +514,8 @@ def get_income_statement(
 ):
     """Get income statement data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         
         if freq.lower() == "quarterly":
@@ -388,6 +544,8 @@ def get_insider_transactions(
 ):
     """Get insider transactions data from yfinance."""
     try:
+        # 统一转换股票代码格式
+        ticker = normalize_ticker(ticker)
         ticker_obj = yf.Ticker(ticker.upper())
         data = ticker_obj.insider_transactions
         

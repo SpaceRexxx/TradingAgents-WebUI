@@ -3,6 +3,8 @@
 from tradingagents.agents.utils.agent_states import AgentState
 
 
+from langgraph.graph import END
+
 class ConditionalLogic:
     """Handles conditional logic for determining graph flow."""
 
@@ -17,7 +19,7 @@ class ConditionalLogic:
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_market"
-        return "Msg Clear Market"
+        return END
 
     def should_continue_social(self, state: AgentState):
         """Determine if social media analysis should continue."""
@@ -25,7 +27,7 @@ class ConditionalLogic:
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_social"
-        return "Msg Clear Social"
+        return END
 
     def should_continue_news(self, state: AgentState):
         """Determine if news analysis should continue."""
@@ -33,15 +35,15 @@ class ConditionalLogic:
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_news"
-        return "Msg Clear News"
+        return END
 
     def should_continue_fundamentals(self, state: AgentState):
-        """Determine if fundamentals analysis should continue."""
+        """Determine if fundamental analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_fundamentals"
-        return "Msg Clear Fundamentals"
+        return END
 
     def should_continue_debate(self, state: AgentState) -> str:
         """Determine if debate should continue."""
@@ -60,8 +62,8 @@ class ConditionalLogic:
             state["risk_debate_state"]["count"] >= 3 * self.max_risk_discuss_rounds
         ):  # 3 rounds of back-and-forth between 3 agents
             return "Risk Judge"
-        if state["risk_debate_state"]["latest_speaker"].startswith("Risky"):
-            return "Safe Analyst"
-        if state["risk_debate_state"]["latest_speaker"].startswith("Safe"):
+        if state["risk_debate_state"]["latest_speaker"].startswith("Aggressive"):
+            return "Conservative Analyst"
+        if state["risk_debate_state"]["latest_speaker"].startswith("Conservative"):
             return "Neutral Analyst"
-        return "Risky Analyst"
+        return "Aggressive Analyst"

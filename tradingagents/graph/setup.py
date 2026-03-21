@@ -98,59 +98,51 @@ class GraphSetup:
         trader_node = create_trader(self.quick_thinking_llm, self.trader_memory)
 
         # Create risk analysis nodes
-        risky_analyst = create_risky_debator(self.quick_thinking_llm)
+        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm)
         neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
-        safe_analyst = create_safe_debator(self.quick_thinking_llm)
+        conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
         risk_manager_node = create_risk_manager(
             self.deep_thinking_llm, self.risk_manager_memory
         )
 
-        # Create workflow
+        # Create main workflow
         workflow = StateGraph(AgentState)
 
-        # Add analyst nodes to the graph
+        # ---------------------------------------------------------
+        # 【并发改造】: Create a SubGraph for the Analyst Team
+        # ---------------------------------------------------------
+        analyst_workflow = StateGraph(AgentState)
         for analyst_type, node in analyst_nodes.items():
-            workflow.add_node(f"{analyst_type.capitalize()} Analyst", node)
-            workflow.add_node(
-                f"Msg Clear {analyst_type.capitalize()}", delete_nodes[analyst_type]
-            )
-            workflow.add_node(f"tools_{analyst_type}", tool_nodes[analyst_type])
+            current_analyst = f"{analyst_type.capitalize()} Analyst"
 
+            # Add nodes to subgraph
+            analyst_workflow.add_node(current_analyst, node)
+
+            # Edge from SubGraph START to each analyst (Parallel Start)
+            analyst_workflow.add_edge(START, current_analyst)
+
+            # Edge from analyst to END directly (Tool loop is handled internally by React Agent)
+            analyst_workflow.add_edge(current_analyst, END)
+
+        # Compile the subgraph
+        compiled_analyst_workflow = analyst_workflow.compile()
+
+        # Add the compiled subgraph to the main workflow as a single node
+        workflow.add_node("Analyst Team", compiled_analyst_workflow)
+        
         # Add other nodes
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
         workflow.add_node("Research Manager", research_manager_node)
         workflow.add_node("Trader", trader_node)
-        workflow.add_node("Risky Analyst", risky_analyst)
+        workflow.add_node("Aggressive Analyst", aggressive_analyst)
         workflow.add_node("Neutral Analyst", neutral_analyst)
-        workflow.add_node("Safe Analyst", safe_analyst)
+        workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Risk Judge", risk_manager_node)
 
-        # Define edges
-        # Start with the first analyst
-        first_analyst = selected_analysts[0]
-        workflow.add_edge(START, f"{first_analyst.capitalize()} Analyst")
-
-        # Connect analysts in sequence
-        for i, analyst_type in enumerate(selected_analysts):
-            current_analyst = f"{analyst_type.capitalize()} Analyst"
-            current_tools = f"tools_{analyst_type}"
-            current_clear = f"Msg Clear {analyst_type.capitalize()}"
-
-            # Add conditional edges for current analyst
-            workflow.add_conditional_edges(
-                current_analyst,
-                getattr(self.conditional_logic, f"should_continue_{analyst_type}"),
-                [current_tools, current_clear],
-            )
-            workflow.add_edge(current_tools, current_analyst)
-
-            # Connect to next analyst or to Bull Researcher if this is the last analyst
-            if i < len(selected_analysts) - 1:
-                next_analyst = f"{selected_analysts[i+1].capitalize()} Analyst"
-                workflow.add_edge(current_clear, next_analyst)
-            else:
-                workflow.add_edge(current_clear, "Bull Researcher")
+        # Main Graph Edges
+        workflow.add_edge(START, "Analyst Team")
+        workflow.add_edge("Analyst Team", "Bull Researcher")
 
         # Add remaining edges
         workflow.add_conditional_edges(
@@ -170,17 +162,17 @@ class GraphSetup:
             },
         )
         workflow.add_edge("Research Manager", "Trader")
-        workflow.add_edge("Trader", "Risky Analyst")
+        workflow.add_edge("Trader", "Aggressive Analyst")
         workflow.add_conditional_edges(
-            "Risky Analyst",
+            "Aggressive Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
-                "Safe Analyst": "Safe Analyst",
+                "Conservative Analyst": "Conservative Analyst",
                 "Risk Judge": "Risk Judge",
             },
         )
         workflow.add_conditional_edges(
-            "Safe Analyst",
+            "Conservative Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
                 "Neutral Analyst": "Neutral Analyst",
@@ -191,7 +183,7 @@ class GraphSetup:
             "Neutral Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
-                "Risky Analyst": "Risky Analyst",
+                "Aggressive Analyst": "Aggressive Analyst",
                 "Risk Judge": "Risk Judge",
             },
         )

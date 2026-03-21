@@ -8,8 +8,8 @@ def create_neutral_debator(llm):
         history = risk_debate_state.get("history", "")
         neutral_history = risk_debate_state.get("neutral_history", "")
 
-        current_risky_response = risk_debate_state.get("current_risky_response", "")
-        current_safe_response = risk_debate_state.get("current_safe_response", "")
+        current_aggressive_response = risk_debate_state.get("current_aggressive_response", "")
+        current_conservative_response = risk_debate_state.get("current_conservative_response", "")
 
         market_research_report = state["market_report"]
         sentiment_report = state["sentiment_report"]
@@ -29,7 +29,7 @@ def create_neutral_debator(llm):
 社交媒体情绪报告: {sentiment_report}
 最新世界动态报告: {news_report}
 公司基本面报告: {fundamentals_report}
-这是当前的对话历史: {history} 这是激进型分析师的最新回应: {current_risky_response} 这是保守型分析师的最新回应: {current_safe_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
+这是当前的对话历史: {history} 这是激进型分析师的最新回应: {current_aggressive_response} 这是保守型分析师的最新回应: {current_conservative_response}。如果其他观点没有回应，不要凭空想象，只陈述你自己的观点。
 
 通过批判性地分析双方观点来积极参与，指出激进和保守论点中的弱点，以倡导一种更平衡的方法。挑战他们的每一个论点，以说明为什么一个温和的风险策略可能两全其美，既提供增长潜力，又防范极端波动。专注于辩论，而不仅仅是呈现数据，旨在表明一个平衡的观点可以带来最可靠的结果。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
@@ -42,14 +42,14 @@ def create_neutral_debator(llm):
 
         new_risk_debate_state = {
             "history": history + "\n" + argument,
-            "risky_history": risk_debate_state.get("risky_history", ""),
-            "safe_history": risk_debate_state.get("safe_history", ""),
+            "aggressive_history": risk_debate_state.get("aggressive_history", ""),
+            "conservative_history": risk_debate_state.get("conservative_history", ""),
             "neutral_history": neutral_history + "\n" + argument,
             "latest_speaker": "Neutral",
-            "current_risky_response": risk_debate_state.get(
-                "current_risky_response", ""
+            "current_aggressive_response": risk_debate_state.get(
+                "current_aggressive_response", ""
             ),
-            "current_safe_response": risk_debate_state.get("current_safe_response", ""),
+            "current_conservative_response": risk_debate_state.get("current_conservative_response", ""),
             "current_neutral_response": argument,
             "count": risk_debate_state["count"] + 1,
         }
