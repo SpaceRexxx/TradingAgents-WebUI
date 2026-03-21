@@ -264,8 +264,34 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
+    # --- UI 首选项持久化 ---
+    PREFS_FILE = ".ui_prefs.json"
+    def load_prefs():
+        if os.path.exists(PREFS_FILE):
+            try:
+                with open(PREFS_FILE, "r") as f: return json.load(f)
+            except: pass
+        return {}
+    def save_prefs(prefs):
+        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
+        
+    if "ui_prefs" not in st.session_state:
+        st.session_state.ui_prefs = load_prefs()
+        
+    def update_pref(key, value):
+        st.session_state.ui_prefs[key] = value
+        save_prefs(st.session_state.ui_prefs)
+
     provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "NVIDIA": "https://integrate.api.nvidia.com/v1", "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
-    selected_llm_provider_name = st.selectbox("请选择 LLM 提供商:", options=list(provider_options.keys()))
+    
+    prov_keys = list(provider_options.keys())
+    saved_prov = st.session_state.ui_prefs.get("provider")
+    prov_idx = prov_keys.index(saved_prov) if saved_prov in prov_keys else 0
+    
+    selected_llm_provider_name = st.selectbox("请选择 LLM 提供商:", options=prov_keys, index=prov_idx)
+    if selected_llm_provider_name != saved_prov:
+        update_pref("provider", selected_llm_provider_name)
+        
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
@@ -287,9 +313,26 @@ with st.sidebar:
     shallow_options = SHALLOW_AGENT_OPTIONS.get(provider_key, [])
     deep_options = DEEP_AGENT_OPTIONS.get(provider_key, [])
     format_func = lambda x: x[0]
-    selected_shallow_tuple = st.selectbox("快速思考引擎:", options=shallow_options, format_func=format_func, help="用于快速、常规任务的轻量级模型")
+    
+    def get_opt_idx(opts, saved_val):
+        for i, opt in enumerate(opts):
+            if opt[1] == saved_val: return i
+        return 0
+
+    saved_shallow = st.session_state.ui_prefs.get(f"{provider_key}_shallow")
+    shallow_idx = get_opt_idx(shallow_options, saved_shallow)
+    selected_shallow_tuple = st.selectbox("快速思考引擎:", options=shallow_options, format_func=format_func, index=shallow_idx, help="用于快速、常规任务的轻量级模型")
+    if selected_shallow_tuple and selected_shallow_tuple[1] != saved_shallow:
+        update_pref(f"{provider_key}_shallow", selected_shallow_tuple[1])
+        
     shallow_thinker = selected_shallow_tuple[1] if selected_shallow_tuple else None
-    selected_deep_tuple = st.selectbox("深度思考引擎:", options=deep_options, format_func=format_func, help="用于复杂分析和深度辩论的强大模型")
+    
+    saved_deep = st.session_state.ui_prefs.get(f"{provider_key}_deep")
+    deep_idx = get_opt_idx(deep_options, saved_deep)
+    selected_deep_tuple = st.selectbox("深度思考引擎:", options=deep_options, format_func=format_func, index=deep_idx, help="用于复杂分析和深度辩论的强大模型")
+    if selected_deep_tuple and selected_deep_tuple[1] != saved_deep:
+        update_pref(f"{provider_key}_deep", selected_deep_tuple[1])
+        
     deep_thinker = selected_deep_tuple[1] if selected_deep_tuple else None
     st.markdown("---")
     position_status_option = st.radio("您当前是否持有该股票？", options=["否，我没有持仓", "是，我已持有仓位"], index=0, horizontal=True)
