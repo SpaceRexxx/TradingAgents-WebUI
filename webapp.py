@@ -306,20 +306,7 @@ with st.sidebar:
     st.sidebar.markdown("---")
     st.sidebar.header("下载报告")
     download_placeholder = st.sidebar.empty()
-    if st.session_state.current_analysis_paths and 'pdf' in st.session_state.current_analysis_paths:
-        pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
-        if pdf_path.exists():
-            with open(pdf_path, "rb") as f:
-                st.sidebar.download_button(
-                    label="📂 下载 PDF 完整报告",
-                    data=f.read(),
-                    file_name=f"TradingAgents_Report_{selected_ticker}_{analysis_date}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-        else:
-            download_placeholder.info("分析已准备好下载，但 PDF 文件暂不可用。")
-    else:
+    if not st.session_state.final_state:
         download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
     # 【新增】侧边栏调试面板 (始终可见)
