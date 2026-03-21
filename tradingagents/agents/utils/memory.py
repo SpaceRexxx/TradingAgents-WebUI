@@ -62,6 +62,18 @@ class FinancialSituationMemory:
                         model_name_to_use = "text-embedding-3-small"
                     else:
                         raise ValueError("NVIDIA_API_KEY (and OPENAI_API_KEY fallback) not set for NVIDIA provider.")
+            elif "volces.com" in backend_url:
+                print("--- [DEBUG] Memory: Specifically identified Volcengine (Ark). ---")
+                api_key_to_use = os.environ.get("ARK_API_KEY")
+                model_name_to_use = "text-embedding-3-small" # 默认先用 OpenAI 格式测试
+                if not api_key_to_use:
+                    # 尝试从 OpenAI Key 降级
+                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if api_key_to_use:
+                        print("--- [DEBUG] Memory: Ark Key missing, falling back to OpenAI Key. ---")
+                        backend_url = "https://api.openai.com/v1"
+                    else:
+                        raise ValueError("ARK_API_KEY (and OPENAI_API_KEY fallback) not set for Volcengine.")
             else: # Default to OpenAI key for others
                 api_key_to_use = os.environ.get("OPENAI_API_KEY")
 
