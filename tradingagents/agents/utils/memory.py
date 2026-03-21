@@ -48,24 +48,46 @@ class FinancialSituationMemory:
                 model_name_to_use = "deepseek-text-embedding-v2"
                 if not api_key_to_use:
                     raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
+            elif "nvidia.com" in backend_url:
+                print("--- [DEBUG] Memory: Specifically identified NVIDIA. ---")
+                api_key_to_use = os.environ.get("NVIDIA_API_KEY")
+                # NVIDIA NIM 常用嵌入模型，如果用户没配，我们可以尝试降级或使用一个默认名
+                model_name_to_use = "nvidia/nv-embedqa-e5-v5" 
+                if not api_key_to_use:
+                    # 尝试降级使用 OpenAI Key（如果用户配置了混合模式）
+                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if api_key_to_use:
+                        print("--- [DEBUG] Memory: NVIDIA Key missing, falling back to OpenAI Key for Embeddings. ---")
+                        backend_url = "https://api.openai.com/v1" # 重定向嵌入请求到 OpenAI
+                        model_name_to_use = "text-embedding-3-small"
+                    else:
+                        raise ValueError("NVIDIA_API_KEY (and OPENAI_API_KEY fallback) not set for NVIDIA provider.")
+            elif "volces.com" in backend_url:
+                print("--- [DEBUG] Memory: Specifically identified Volcengine (Ark). ---")
+                api_key_to_use = os.environ.get("ARK_API_KEY")
+                model_name_to_use = "text-embedding-3-small" # 默认先用 OpenAI 格式测试
+                if not api_key_to_use:
+                    # 尝试从 OpenAI Key 降级
+                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if api_key_to_use:
+                        print("--- [DEBUG] Memory: Ark Key missing, falling back to OpenAI Key. ---")
+                        backend_url = "https://api.openai.com/v1"
+                    else:
+                        raise ValueError("ARK_API_KEY (and OPENAI_API_KEY fallback) not set for Volcengine.")
             else: # Default to OpenAI key for others
                 api_key_to_use = os.environ.get("OPENAI_API_KEY")
 
             print(f"--- [DEBUG] Memory: Using API Key starting with '{str(api_key_to_use)[:6]}', Model='{model_name_to_use}', URL='{backend_url}' ---")
 
-            original_base_url = openai.base_url
-            original_api_key = openai.api_key
-            try:
-                openai.base_url = backend_url
-                openai.api_key = api_key_to_use
-                
-                embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-                    api_key=api_key_to_use, 
-                    model_name=model_name_to_use
-                )
-            finally:
-                openai.base_url = original_base_url
-                openai.api_key = original_api_key
+            # 关键：避免直接修改 openai.base_url 全局变量，直接传参给函数。
+            # 如果 backend_url 包含 /v1 路径，OpenAIEmbeddingFunction 内部通常能处理好，
+            # 但为了极致稳定性，我们手动管理 api_base 参数。
+            
+            embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key_to_use, 
+                api_base=backend_url, # 直接局部注入 API 地址
+                model_name=model_name_to_use
+            )
         
         # --- 逻辑结束 ---
 

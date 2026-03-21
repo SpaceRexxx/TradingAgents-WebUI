@@ -19,10 +19,7 @@ def get_news(ticker_or_topic, start_date, end_date) -> dict[str, str] | str:
     params = {
         "time_from": format_datetime_for_api(start_date),
         "time_to": format_datetime_for_api(end_date),
-        "sort": "LATEST",
-        "limit": "50",
     }
-    
     # 智能判断是 Ticker 还是 Topic
     # 如果输入是1-5个大写字母和可选的点(如 BRK.A)，则视为 Ticker
     if re.match(r'^[A-Z]{1,5}(\.[A-Z])?$', ticker_or_topic):

@@ -23,10 +23,10 @@ class InvestDebateState(TypedDict):
 
 # 风险管理团队状态
 class RiskDebateState(TypedDict):
-    risky_history: Annotated[
+    aggressive_history: Annotated[
         str, "激进型代理的对话历史"
     ]
-    safe_history: Annotated[
+    conservative_history: Annotated[
         str, "保守型代理的对话历史"
     ]
     neutral_history: Annotated[
@@ -34,10 +34,10 @@ class RiskDebateState(TypedDict):
     ]
     history: Annotated[str, "完整对话历史"]
     latest_speaker: Annotated[str, "上一位发言的分析师"]
-    current_risky_response: Annotated[
+    current_aggressive_response: Annotated[
         str, "激进型分析师的最新回应"
     ]
-    current_safe_response: Annotated[
+    current_conservative_response: Annotated[
         str, "保守型分析师的最新回应"
     ]
     current_neutral_response: Annotated[
@@ -47,11 +47,14 @@ class RiskDebateState(TypedDict):
     count: Annotated[int, "当前对话长度"]
 
 
+def update_last(a: str, b: str) -> str:
+    return b if b is not None else a
+
 class AgentState(MessagesState):
     company_of_interest: Annotated[str, "我们感兴趣的交易公司"]
     trade_date: Annotated[str, "我们进行交易的日期"]
 
-    sender: Annotated[str, "发送此消息的代理"]
+    sender: Annotated[str, update_last]
 
     # 研究步骤
     market_report: Annotated[str, "来自市场分析师的报告"]
