@@ -1,4 +1,4 @@
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from tradingagents.agents.utils.agent_utils import get_news, get_global_news
 
@@ -17,14 +17,14 @@ def create_news_analyst(llm):
             "**重要指令：你的所有分析和最终报告都必须使用中文撰写。**"
         )
 
-        agent = create_react_agent(llm, tools, state_modifier=system_message)
+        agent = create_react_agent(llm, tools)
 
         prompt_content = f"请开始进行深入的公司与宏观经济新闻分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
 
-        result = agent.invoke({"messages": [HumanMessage(content=prompt_content)]})
+        result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
 
         final_report = result["messages"][-1].content
-        internal_messages = result["messages"][1:]
+        internal_messages = result["messages"][2:]
 
         return {
             "messages": internal_messages,

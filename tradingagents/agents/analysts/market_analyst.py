@@ -1,4 +1,4 @@
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from tradingagents.agents.utils.agent_utils import get_stock_data, get_indicators
 
@@ -26,18 +26,18 @@ def create_market_analyst(llm):
         
         # 使用隔离的 React Agent 来处理内部工具调用循环
         # 避免在并发模式下污染父图的 Global Messages 导致模型发生幻觉或崩溃
-        agent = create_react_agent(llm, tools, state_modifier=system_message)
+        agent = create_react_agent(llm, tools)
         
         prompt_content = f"请开始进行深入的市场与技术面分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
         
-        # 内部同步阻塞调用该 Agent 完成所有推导工作
-        result = agent.invoke({"messages": [HumanMessage(content=prompt_content)]})
+        # 内部同步阻塞调用该 Agent 完成所有推导工作，向下兼容 LangGraph 低版本
+        result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
         
         # 提取最终研报大纲
         final_report = result["messages"][-1].content
         
-        # 提取中间所有的工具调用日志（如果需要保留到主日志，可以塞回 messages）
-        internal_messages = result["messages"][1:]
+        # 提取中间所有的工具调用日志（剥离System和Human）
+        internal_messages = result["messages"][2:]
 
         return {
             "messages": internal_messages,
