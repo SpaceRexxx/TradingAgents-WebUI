@@ -292,6 +292,19 @@ with st.sidebar:
     if selected_llm_provider_name != saved_prov:
         update_pref("provider", selected_llm_provider_name)
         
+    provider_key = selected_llm_provider_name.lower()
+    pref_api_key_name = f"{provider_key}_api_key"
+    saved_api_key = st.session_state.ui_prefs.get(pref_api_key_name, "")
+    
+    input_api_key = st.text_input(
+        f"API Key (可选，将优先使用并覆盖环境变量):", 
+        value=saved_api_key, 
+        type="password",
+        help="留空则自动读取系统环境变量中的对应 KEY"
+    )
+    if input_api_key != saved_api_key:
+        update_pref(pref_api_key_name, input_api_key)
+        
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
@@ -401,7 +414,6 @@ if st.session_state.start_analysis and not st.session_state.final_state:
         st.sidebar.error("请为选择的提供商选择模型。")
         st.session_state.start_analysis = False
     else:
-        # 【修改】将配置(config)的创建移到这里
         config = DEFAULT_CONFIG.copy(); 
         config.update({ 
             "max_debate_rounds": selected_research_depth, 
@@ -410,6 +422,7 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "deep_think_llm": deep_thinker, 
             "backend_url": backend_url, 
             "llm_provider": selected_llm_provider_name.lower(), 
+            "api_key": input_api_key.strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
             "results_dir": str(RESULTS_DIR) # 确保 config 中有 results_dir
         })
