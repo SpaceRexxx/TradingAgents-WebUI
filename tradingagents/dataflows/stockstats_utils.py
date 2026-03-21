@@ -8,12 +8,16 @@ from .config import get_config
 
 def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
     """Normalize a stock DataFrame for stockstats: parse dates, drop invalid rows, fill price gaps."""
-    data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
-    data = data.dropna(subset=["Date"])
+    # Find date column case-insensitively
+    date_col = next((c for c in data.columns if c.lower() == "date"), "Date")
+    if date_col in data.columns:
+        data[date_col] = pd.to_datetime(data[date_col], errors="coerce")
+        data = data.dropna(subset=[date_col])
 
-    price_cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in data.columns]
+    data.columns = [c.lower() for c in data.columns]
+    price_cols = [c for c in ["open", "high", "low", "close", "volume"] if c in data.columns]
     data[price_cols] = data[price_cols].apply(pd.to_numeric, errors="coerce")
-    data = data.dropna(subset=["Close"])
+    data = data.dropna(subset=["close"])
     data[price_cols] = data[price_cols].ffill().bfill()
 
     return data
@@ -64,11 +68,11 @@ class StockstatsUtils:
 
         data = _clean_dataframe(data)
         df = wrap(data)
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
         curr_date_str = curr_date_dt.strftime("%Y-%m-%d")
 
         df[indicator]  # trigger stockstats to calculate the indicator
-        matching_rows = df[df["Date"].str.startswith(curr_date_str)]
+        matching_rows = df[df["date"].str.startswith(curr_date_str)]
 
         if not matching_rows.empty:
             indicator_value = matching_rows[indicator].values[0]

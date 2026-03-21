@@ -333,7 +333,7 @@ def _get_stock_stats_bulk(
 
     data = _clean_dataframe(data)
     df = wrap(data)
-    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
     
     # Calculate the indicator for all rows at once
     df[indicator]  # This triggers stockstats to calculate the indicator
@@ -341,7 +341,7 @@ def _get_stock_stats_bulk(
     # Create a dictionary mapping date strings to indicator values
     result_dict = {}
     for _, row in df.iterrows():
-        date_str = row["Date"]
+        date_str = row["date"]
         indicator_value = row[indicator]
         
         # Handle NaN/None values

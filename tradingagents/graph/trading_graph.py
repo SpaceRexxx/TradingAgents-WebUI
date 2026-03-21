@@ -11,7 +11,8 @@ try:
     from dotenv import load_dotenv
     _env_path = Path(__file__).parent.parent.parent / ".env"
     if _env_path.exists():
-        load_dotenv(_env_path, override=False)
+        # 强制 override，确保在 WebApp 场景下能读取到运行时可能变更的 .env 文件
+        load_dotenv(_env_path, override=True)
 except ImportError:
     pass
 
@@ -169,6 +170,7 @@ class TradingAgentsGraph:
 
         if fixed_provider == "openai":
             api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            if api_key: api_key = str(api_key).strip()
             if not api_key:
                 raise ValueError("OPENAI_API_KEY / api_key not provided.")
             
@@ -193,6 +195,7 @@ class TradingAgentsGraph:
             )
         elif fixed_provider == "deepseek":
             api_key = self.config.get("api_key") or os.environ.get("DEEPSEEK_API_KEY")
+            if api_key: api_key = str(api_key).strip()
             if not api_key:
                 raise ValueError("DEEPSEEK_API_KEY / api_key not provided.")
             
@@ -217,6 +220,7 @@ class TradingAgentsGraph:
             )
         elif fixed_provider == "nvidia":
             api_key = self.config.get("api_key") or os.environ.get("NVIDIA_API_KEY")
+            if api_key: api_key = str(api_key).strip()
             if not api_key:
                 api_key = self.config.get("nvidia_api_key")
             if not api_key:
@@ -247,6 +251,7 @@ class TradingAgentsGraph:
             )
         elif fixed_provider == "volcengine":
             api_key = self.config.get("api_key") or os.environ.get("ARK_API_KEY")
+            if api_key: api_key = str(api_key).strip()
             if not api_key:
                 api_key = self.config.get("ark_api_key")
             if not api_key:
