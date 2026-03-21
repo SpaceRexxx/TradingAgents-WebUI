@@ -89,7 +89,7 @@ def create_risk_manager(llm, memory):
         return {
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": response.content,
-            "sender": "Risky Analyst"
+            "sender": "Risk Judge"
         }
 
     return risk_manager_node
