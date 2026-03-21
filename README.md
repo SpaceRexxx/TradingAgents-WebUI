@@ -105,25 +105,66 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
   <img src="assets/risk.png" width="70%" style="display: inline-block; margin: 0 2%;">
 </p>
 
-## 安装与命令行 (CLI)
+## 安装指南 (Installation)
 
-### 快速安装
+本项目强依赖 Python 3.10 及以上环境，并由于集成了全新的 PDF 导出功能，您还需要安装 Playwright 浏览器内核。
 
-首先，克隆 TradingAgents 仓库：
+### 🍎 macOS (Apple Silicon M1/M2 或 Intel)
+1. **安装环境管理工具 (Miniconda / Anaconda)**（如已安装可跳过）:
+   ```bash
+   brew install --cask miniconda
+   ```
+2. **下载并进入项目**:
+   ```bash
+   git clone https://github.com/SpaceRexxx/TradingAgents.git
+   cd TradingAgents
+   ```
+3. **创建虚拟环境并激活**:
+   ```bash
+   conda create -n tradingagents python=3.11 -y
+   conda activate tradingagents
+   ```
+4. **安装 Python 依赖库与浏览器内核**:
+   ```bash
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
+
+### 🪟 Windows (推荐使用 PowerShell/CMD)
+1. **安装 Anaconda 或 Miniconda**:
+   请前往 [Miniconda 官网](https://docs.conda.io/en/latest/miniconda.html) 下载 Windows 安装包并安装。
+2. **在终端中下载并进入项目**:
+   ```powershell
+   git clone https://github.com/SpaceRexxx/TradingAgents.git
+   cd TradingAgents
+   ```
+3. **创建虚拟环境并激活**:
+   ```powershell
+   conda create -n tradingagents python=3.11 -y
+   conda activate tradingagents
+   ```
+4. **安装依赖与浏览器内核**:
+   ```powershell
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
+
+### 🐧 Linux (Ubuntu / Debian)
 ```bash
+# 1. 下载项目
 git clone https://github.com/SpaceRexxx/TradingAgents.git
 cd TradingAgents
-```
 
-推荐使用您喜欢的环境管理器创建一个纯净的虚拟环境：
-```bash
-conda create -n tradingagents python=3.13
-conda activate tradingagents
-```
+# 2. 安装 Python3.11 及 venv (若不使用 conda)
+sudo apt update
+sudo apt install python3.11 python3.11-venv python3-pip -y
+python3.11 -m venv venv
+source venv/bin/activate
 
-安装所有依赖树：
-```bash
+# 3. 安装依赖文件与对应的浏览器内核所需的系统包
 pip install -r requirements.txt
+playwright install chromium
+playwright install-deps
 ```
 
 ### 必需的 API (Required APIs)
