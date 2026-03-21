@@ -259,13 +259,25 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
-    provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
+    provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "NVIDIA": "https://integrate.api.nvidia.com/v1", "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
     selected_llm_provider_name = st.selectbox("请选择 LLM 提供商:", options=list(provider_options.keys()))
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
-    SHALLOW_AGENT_OPTIONS = { "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], "openai": [("GPT-4o mini - 快速高效", "gpt-4o-mini"), ("GPT-4o - 标准模型", "gpt-4o")], "google": [("Gemini 1.5 Flash - 高性价比", "gemini-1.5-flash-latest")] }
-    DEEP_AGENT_OPTIONS = { "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], "openai": [("GPT-4o - 旗舰模型", "gpt-4o"), ("GPT-4 Turbo - 高性能", "gpt-4-turbo")], "google": [("Gemini 1.5 Pro - 先进推理", "gemini-1.5-pro-latest")]}
+    SHALLOW_AGENT_OPTIONS = { 
+        "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], 
+        "nvidia": [("NVIDIA-DeepSeek-V3", "deepseek-ai/deepseek-v3.2")],
+        "火山引擎 (volcengine)": [("Seed-2.0", "ep-20260315170816-rdcb9")],
+        "openai": [("GPT-4o mini - 快速高效", "gpt-4o-mini"), ("GPT-4o - 标准模型", "gpt-4o")], 
+        "google": [("Gemini 1.5 Flash - 高性价比", "gemini-1.5-flash-latest")] 
+    }
+    DEEP_AGENT_OPTIONS = { 
+        "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], 
+        "nvidia": [("NVIDIA-DeepSeek-V3 (Thinking)", "deepseek-ai/deepseek-v3.2")],
+        "火山引擎 (volcengine)": [("Seed-2.0 (Thinking)", "ep-20260315170816-rdcb9")],
+        "openai": [("GPT-4o - 旗舰模型", "gpt-4o"), ("GPT-4 Turbo - 高性能", "gpt-4-turbo")], 
+        "google": [("Gemini 1.5 Pro - 先进推理", "gemini-1.5-pro-latest")]
+    }
     provider_key = selected_llm_provider_name.lower()
     shallow_options = SHALLOW_AGENT_OPTIONS.get(provider_key, [])
     deep_options = DEEP_AGENT_OPTIONS.get(provider_key, [])
@@ -288,6 +300,9 @@ with st.sidebar:
         
     st.sidebar.markdown("---")
     st.sidebar.header("下载报告")
+    # --- 【重构】下载按钮逻辑 ---
+    # 我们先在侧边栏放置一个 empty 容器。
+    # 真正的下载按钮将在下方主体逻辑（PDF生成或加载后）向这个容器中注入。
     download_placeholder = st.sidebar.empty()
     download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
@@ -464,17 +479,26 @@ elif st.session_state.final_state:
             
     # 【修改】下载按钮逻辑
     pdf_data = None
-    # 检查是否是刚加载的历史记录
-    if st.session_state.current_analysis_paths:
+    file_name_for_download = f"TradingAgents_Report_{ticker_from_state}_{date_from_state}.pdf"
+    
+    # 场景 A: 检查是否是刚加载的历史记录
+    if st.session_state.current_analysis_paths and 'pdf' in st.session_state.current_analysis_paths:
         pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
         if pdf_path.exists():
-            with st.spinner(f"正在加载已保存的 PDF: {pdf_path.name}..."):
-                with open(pdf_path, "rb") as f:
-                    pdf_data = f.read()
+            with open(pdf_path, "rb") as f:
+                pdf_data = f.read()
+            download_placeholder.empty() # 清除 info
+            download_placeholder.download_button(
+                label="📄 下载完整PDF报告",
+                data=pdf_data,
+                file_name=file_name_for_download,
+                mime="application/pdf",
+                use_container_width=True
+            )
         else:
             download_placeholder.error(f"错误: 未找到已保存的 PDF 文件于 {pdf_path}")
             
-    # 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
+    # 场景 B: 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
     elif st.session_state.start_analysis:
         with st.spinner("正在生成并保存 PDF 报告... (这可能需要一点时间)"):
             pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
@@ -484,21 +508,35 @@ elif st.session_state.final_state:
                 config_for_saving.update({"results_dir": str(RESULTS_DIR)})
                 save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
                 st.toast("分析结果已保存到磁盘！")
-        # 【重要】清除标志，防止重复保存
+                
+                # 生成完毕后，立即向侧边栏注入按钮！
+                download_placeholder.empty()
+                download_placeholder.download_button(
+                    label="📄 下载完整PDF报告",
+                    data=pdf_data,
+                    file_name=file_name_for_download,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        # 【重要】清除标志，防止重复保存和无限循环
         st.session_state.start_analysis = False 
-            
-    # 显示下载按钮
-    if pdf_data:
-        download_placeholder.download_button(
-            label="📄 下载完整PDF报告",
-            data=pdf_data,
-            file_name=f"TradingAgents_Report_{ticker_from_state}_{date_from_state}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
-    else:
-        # 这是一个捕获逻辑，如果既不是新分析也不是加载的，则不显示按钮
-        download_placeholder.info("分析完成后，将在此处提供下载链接。")
+    
+    # 场景 C: 页面的后续重新刷新（已有 final_state 但 start_analysis 为 False，且不是从历史加载的）
+    # 此时我们需要从刚保存的文件中重新读取数据以维持按钮存在。
+    elif not st.session_state.current_analysis_paths and not st.session_state.start_analysis:
+         # 尝试预测刚刚保存的 PDF 路径
+         predicted_pdf_path = RESULTS_DIR / ticker_from_state / f"report_{date_from_state}.pdf"
+         if predicted_pdf_path.exists():
+             with open(predicted_pdf_path, "rb") as f:
+                 pdf_data = f.read()
+             download_placeholder.empty()
+             download_placeholder.download_button(
+                 label="📄 下载完整PDF报告",
+                 data=pdf_data,
+                 file_name=file_name_for_download,
+                 mime="application/pdf",
+                 use_container_width=True
+             )
 
 # 3. 初始欢迎屏幕
 else:
