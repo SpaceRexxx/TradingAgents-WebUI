@@ -47,11 +47,14 @@ class RiskDebateState(TypedDict):
     count: Annotated[int, "当前对话长度"]
 
 
+def update_last(a: str, b: str) -> str:
+    return b if b is not None else a
+
 class AgentState(MessagesState):
     company_of_interest: Annotated[str, "我们感兴趣的交易公司"]
     trade_date: Annotated[str, "我们进行交易的日期"]
 
-    sender: Annotated[str, "发送此消息的代理"]
+    sender: Annotated[str, update_last]
 
     # 研究步骤
     market_report: Annotated[str, "来自市场分析师的报告"]
