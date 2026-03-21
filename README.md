@@ -120,7 +120,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
    ```
 2. **下载并进入项目**:
    ```bash
-   git clone https://github.com/SpaceRexxx/TradingAgents.git
+   git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
    cd TradingAgents
    ```
 3. **创建虚拟环境并激活**:
@@ -139,7 +139,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
    请前往 [Miniconda 官网](https://docs.conda.io/en/latest/miniconda.html) 下载 Windows 安装包并安装。
 2. **在终端中下载并进入项目**:
    ```powershell
-   git clone https://github.com/SpaceRexxx/TradingAgents.git
+   git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
    cd TradingAgents
    ```
 3. **创建虚拟环境并激活**:
@@ -156,7 +156,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 ### 🐧 Linux (Ubuntu / Debian)
 ```bash
 # 1. 下载项目
-git clone https://github.com/SpaceRexxx/TradingAgents.git
+git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
 cd TradingAgents
 
 # 2. 安装 Python3.11 及 venv (若不使用 conda)
@@ -169,6 +169,10 @@ source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 playwright install-deps
+
+# ⚠️ 部署小提示 (Linux 专用)
+# 如果您在无界面的 Linux 服务器上发现导出的 PDF 中文显示为方块，请安装中文字体：
+# sudo apt install fonts-noto-cjk -y
 ```
 
 ### 必需的 API (Required APIs)
