@@ -209,7 +209,26 @@ streamlit run webapp.py
 
 > 🎉 **惊喜体验**：当整套多智能体多轮博弈结束后，Web 页面将会自动调起我们集成的 `Playwright` 引擎，将极长的 markdown 报表全自动转录渲染为优美的 **PDF 研报**。渲染完成后，您可以直接在左下角点击按钮下载！
 
+### 高级功能：极速 CLI 控制台 (Optimized CLI)
 
+如果您更倾向于在命令行中进行沉浸式交易分析，本项目提供了与 WebUI 功能**完全对等**的优化版 CLI。其不仅能在终端实时渲染出精美的控制台界面，更在效率上达到了极致：
+
+**运行命令：**
+```bash
+python -m cli.main
+```
+
+**CLI 核心优化特性：**
+- **⚡ 并发分析启动**：不同于常规 CLI 的串行排队，优化版 CLI 会同步唤起所有选中的分析师团队，实现真正并行的实时进度追踪。
+- **🛰️ 供应商全兼容**：深度适配火山引擎、NVIDIA、DeepSeek、OpenAI 等全部主流供应商。
+- **🔐 动态 Key 注入**：无需手动修改 `.env`，程序启动时会智能检测 Key 状态并支持交互式快速填入与清洗。
+- **📄 自动化 PDF 生成**：CLI 分析一经结束，系统会立即在后台通过 Playwright 完成 PDF 渲染，并保存至 `results/` 目录下。
+
+<p align="center">
+  <img src="assets/cli_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
+</p>
+
+---
 
 ## ⚖️ License & Acknowledgements (版权与致谢)
 
