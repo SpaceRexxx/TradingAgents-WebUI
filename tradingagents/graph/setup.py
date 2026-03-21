@@ -114,23 +114,15 @@ class GraphSetup:
         analyst_workflow = StateGraph(AgentState)
         for analyst_type, node in analyst_nodes.items():
             current_analyst = f"{analyst_type.capitalize()} Analyst"
-            current_tools = f"tools_{analyst_type}"
 
             # Add nodes to subgraph
             analyst_workflow.add_node(current_analyst, node)
-            analyst_workflow.add_node(current_tools, tool_nodes[analyst_type])
 
             # Edge from SubGraph START to each analyst (Parallel Start)
             analyst_workflow.add_edge(START, current_analyst)
 
-            # Conditional loop for tools
-            # Note: conditional logic now returns END instead of a clear node
-            analyst_workflow.add_conditional_edges(
-                current_analyst,
-                getattr(self.conditional_logic, f"should_continue_{analyst_type}"),
-                {current_tools: current_tools, END: END},
-            )
-            analyst_workflow.add_edge(current_tools, current_analyst)
+            # Edge from analyst to END directly (Tool loop is handled internally by React Agent)
+            analyst_workflow.add_edge(current_analyst, END)
 
         # Compile the subgraph
         compiled_analyst_workflow = analyst_workflow.compile()
@@ -138,12 +130,6 @@ class GraphSetup:
         # Add the compiled subgraph to the main workflow as a single node
         workflow.add_node("Analyst Team", compiled_analyst_workflow)
         
-        # Add a single unified Msg Clear node to wipe out parallel tool messages
-        first_analyst = selected_analysts[0]
-        msg_clear_all = delete_nodes[first_analyst]
-        workflow.add_node("Msg Clear Analysts", msg_clear_all)
-        # ---------------------------------------------------------
-
         # Add other nodes
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
@@ -156,8 +142,7 @@ class GraphSetup:
 
         # Main Graph Edges
         workflow.add_edge(START, "Analyst Team")
-        workflow.add_edge("Analyst Team", "Msg Clear Analysts")
-        workflow.add_edge("Msg Clear Analysts", "Bull Researcher")
+        workflow.add_edge("Analyst Team", "Bull Researcher")
 
         # Add remaining edges
         workflow.add_conditional_edges(
