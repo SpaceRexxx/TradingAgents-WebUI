@@ -61,7 +61,7 @@
 
 <div align="center">
 
-🚀 [系统架构](#tradingagents-系统架构) | ⚡ [安装与命令行使用](#安装与命令行-cli) | 🎬 [演示视频](https://www.youtube.com/watch?v=90gr5lwjIho) | 📦 [作为 Python 包使用](#作为-python-包使用) | 🤝 [贡献指南](#参与贡献) | 📄 [引用](#引用)
+🚀 [系统架构](#tradingagents-系统架构) | ⚡ [安装与 Web UI 使用](#安装指南-installation) | 🎬 [演示视频](https://www.youtube.com/watch?v=90gr5lwjIho) | 🤝 [贡献指南](#参与贡献) | 📄 [引用](#引用)
 
 </div>
 
@@ -191,13 +191,13 @@ export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 cp .env.example .env
 ```
 
-### Web UI 与 CLI 使用
+### 快速开始：使用 Web UI 可视化控制台
 
-**最推荐的使用方式（Web 界面版）**：
+运行以下命令即可唤起现代化的动态控制台面板：
 ```bash
 streamlit run webapp.py
 ```
-这将在您的浏览器中唤起现代化的动态控制台面板，您可以在左侧边栏直观地选择大模型提供商（支持 DeepSeek / 火山引擎等）、填入独立配置的 API Key 并立刻开始分析。
+在该界面中，您可以在左侧边栏直观地选择大模型提供商（支持 DeepSeek / 火山引擎等）、填入独立配置的 API Key 并立刻开始分析。
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
@@ -205,53 +205,7 @@ streamlit run webapp.py
 
 > 🎉 **惊喜体验**：当整套多智能体多轮博弈结束后，Web 页面将会自动调起我们集成的 `Playwright` 引擎，将极长的 markdown 报表全自动转录渲染为优美的 **PDF 研报**。渲染完成后，您可以直接在左下角点击按钮下载！
 
-如果您更喜欢原生的终端流式输出，可以运行 **CLI (命令行) 模式**：
-```bash
-python -m cli.main
-```
-此时终端会自动出现交互式屏幕，引导您选择股票代码、分析日期、模型平台以及相应的研究深度配置。随着模型并线执行，您将看到详尽的排版推送。
 
-<p align="center">
-  <img src="assets/cli/cli_init.png" width="100%" style="display: inline-block; margin: 0 2%;">
-</p>
-
-## 作为 Python 包使用
-
-### 实现细节
-我们在底层重构了基于 [LangGraph](https://www.langchain.com/langgraph) 的主干网络，通过将并行多智能体分别封装为极度隔离的沙盒节点（`create_react_agent`），彻底避免了消息池交叉污染与数据幻觉的问题，实现了兼具伸缩性与高度模块化的流水线架构。
-
-### Python 内置调用
-如果您更希望把本框架嵌入到您的自动化代码脚本中，您可以直接导入 `tradingagents` 模块，并初始化 `TradingAgentsGraph()`。调用 `.propagate()` 即可触发分析流并返回最终决策：
-
-```python
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
-
-ta = TradingAgentsGraph(debug=True, config=DEFAULT_CONFIG.copy())
-
-# 正向传播开始推演
-_, decision = ta.propagate("NVDA", "2026-03-20")
-print(decision)
-```
-
-您还可以修改默认的字典配置，深度定制每一层的 LLM 模型、控制风控的最高辩论轮数等：
-
-```python
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
-
-config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "volcengine"           # 可选: volcengine, deepseek, nvidia, openai 等
-config["deep_think_llm"] = "ep-20260315-rdcb9"  # 用于需要复杂思辨的重型推理模型
-config["quick_think_llm"] = "ep-fast-xxx"       # 用于快速处理文字与调用工具的轻量级模型
-config["max_debate_rounds"] = 2                 # 多空博弈的辩论轮数上限
-
-ta = TradingAgentsGraph(debug=True, config=config)
-_, decision = ta.propagate("NVDA", "2026-03-20")
-print(decision)
-```
-
-有关所有可选配置项，请参考代码库中的 `tradingagents/default_config.py`。
 
 ## ⚖️ License & Acknowledgements (版权与致谢)
 
