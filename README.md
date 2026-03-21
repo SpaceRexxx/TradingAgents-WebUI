@@ -192,6 +192,10 @@ streamlit run webapp.py
 ```
 这将在您的浏览器中唤起现代化的动态控制台面板，您可以在左侧边栏直观地选择大模型提供商（支持 DeepSeek / 火山引擎等）、填入独立配置的 API Key 并立刻开始分析。
 
+<p align="center">
+  <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
+</p>
+
 如果您更喜欢原生的终端流式输出，可以运行 **CLI (命令行) 模式**：
 ```bash
 python -m cli.main
