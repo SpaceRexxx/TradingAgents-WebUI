@@ -149,10 +149,52 @@ class TradingAgentsGraph:
         elif provider == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
             self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
-        elif provider == "deepseek":
-            api_key = os.environ.get("DEEPSEEK_API_KEY")
+        # --- [DEBUG] In trading_graph.py: Config provider is '{self.config.get("llm_provider")}', URL is '{self.config.get("backend_url")}' ---
+        
+        # 鲁棒性改进：提取核心 provider 标识（例如将 "火山引擎 (Volcengine)" 识别为 "volcengine"）
+        provider_full = str(self.config.get("llm_provider", "")).lower()
+        fixed_provider = "openai" # 默认值
+        if "volcengine" in provider_full:
+            fixed_provider = "volcengine"
+        elif "nvidia" in provider_full:
+            fixed_provider = "nvidia"
+        elif "deepseek" in provider_full:
+            fixed_provider = "deepseek"
+        elif "google" in provider_full:
+            fixed_provider = "google"
+        elif "openai" in provider_full:
+            fixed_provider = "openai"
+        elif "anthropic" in provider_full:
+            fixed_provider = "anthropic"
+
+        if fixed_provider == "openai":
+            api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY")
             if not api_key:
-                raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
+                raise ValueError("OPENAI_API_KEY / api_key not provided.")
+            
+            # 使用配置中的 URL
+            b_url = self.config.get("backend_url", "https://api.openai.com/v1")
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "deepseek":
+            api_key = self.config.get("api_key") or os.environ.get("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError("DEEPSEEK_API_KEY / api_key not provided.")
             
             # 使用已清洗的 URL
             b_url = self.config["backend_url"]
@@ -161,8 +203,63 @@ class TradingAgentsGraph:
                 model=self.config["deep_think_llm"],
                 api_key=api_key,
                 base_url=b_url,
-                max_retries=5,    # 增加重试次数
-                timeout=900,      # 对于深度思考 (Reasoner) 模型，响应可能非常慢，给足 15 分钟
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "nvidia":
+            api_key = self.config.get("api_key") or os.environ.get("NVIDIA_API_KEY")
+            if not api_key:
+                api_key = self.config.get("nvidia_api_key")
+            if not api_key:
+                raise ValueError("NVIDIA API Key not provided.")
+            
+            b_url = "https://integrate.api.nvidia.com/v1"
+            
+            model_kwargs = {}
+            if "deepseek" in self.config["deep_think_llm"].lower():
+                model_kwargs["chat_template_kwargs"] = {"thinking": True}
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+                model_kwargs=model_kwargs
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
+                http_client=custom_client,
+            )
+        elif fixed_provider == "volcengine":
+            api_key = self.config.get("api_key") or os.environ.get("ARK_API_KEY")
+            if not api_key:
+                api_key = self.config.get("ark_api_key")
+            if not api_key:
+                raise ValueError("ARK API Key not provided.")
+            
+            b_url = "https://ark.cn-beijing.volces.com/api/v3"
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                api_key=api_key,
+                base_url=b_url,
+                max_retries=5,
+                timeout=900,
                 http_client=custom_client,
             )
             self.quick_thinking_llm = ChatOpenAI(
