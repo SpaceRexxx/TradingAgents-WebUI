@@ -25,12 +25,21 @@
 
 ---
 
-# TradingAgents: Multi-Agents LLM Financial Trading Framework
+# 📈 TradingAgents (SpaceRexxx 深度优化版)
+
+本项目是基于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 衍生并进行深度重构优化的增强版本。原项目构筑了优秀的 AI 交易员多智能体框架，本项目在此基础上进行了大量底层架构修复和本土化模型扩展。
+
+## 🌟 核心增强特性 (New Features by SpaceRexxx)
+- **原生并行化与隔离沙盒引擎**：彻底修复原版多智能体并行运行时的内存污染与幻觉问题，分析师团队实现 100% 稳定的并发。
+- **全方位大模型支持**：无缝接入 NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI 等本土常用优质前沿模型。
+- **动态 Web UI 面板**：支持通过侧边栏直观地注入不同供应商的 API Key，彻底接管系统环境变量，并引入安全记忆。
+- **稳定性架构重建**：解决原生网络连通性报错（如屏蔽 HTTP/2 降级干扰），重构记忆类（Memory）消除全局变量污染，增强多指标（OBV 等）支持。
+
+---
 
 ## News
-- [2026-03] **TradingAgents v0.2.1** released with GPT-5.4, Gemini 3.1, Claude 4.6 model coverage and improved system stability.
-- [2026-02] **TradingAgents v0.2.0** released with multi-provider LLM support (GPT-5.x, Gemini 3.x, Claude 4.x, Grok 4.x) and improved system architecture.
-- [2026-01] **Trading-R1** [Technical Report](https://arxiv.org/abs/2509.11420) released, with [Terminal](https://github.com/TauricResearch/Trading-R1) expected to land soon.
+- [2026-03] **TradingAgents SpaceRexxx Fork** integrated with flawless Parallel execution and Volcengine/Nvidia DeepSeek APIs!
+- [2026-03] Upstream **TradingAgents v0.2.1** released with GPT-5.4, Gemini 3.1, Claude 4.6 model coverage.
 
 <div align="center">
 <a href="https://www.star-history.com/#TauricResearch/TradingAgents&Date">
@@ -198,6 +207,14 @@ print(decision)
 ```
 
 See `tradingagents/default_config.py` for all configuration options.
+
+## ⚖️ License & Acknowledgements
+
+本项目的原始框架灵感与基础代码均来源于出色的开源工作 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)，向原作者致以最诚挚的感谢。
+
+本项目沿用原始的 [Apache License 2.0](./LICENSE) 协议进行开源分发。
+- Original Work: Copyright 2024-2025 TauricResearch
+- Modifications: Copyright 2026 SpaceRexxx
 
 ## Contributing
 
