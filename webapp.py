@@ -342,6 +342,9 @@ with st.sidebar:
     # 【修改】“开始分析”按钮现在只设置标志
     if st.button("🚀 开始分析", use_container_width=True):
         reset_state()
+        # 针对并发模式：一开始就把所有的分析师状态设成进行中
+        for name in selected_analyst_names:
+            st.session_state.agent_status[name] = "in_progress"
         st.session_state.start_analysis = True
         st.session_state.has_position = has_position
         st.rerun() # 立即重跑，进入分析逻辑
@@ -430,6 +433,12 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 elif chunk.get("investment_debate_state") and chunk["investment_debate_state"]["history"]: progress_value = 35; progress_text = "阶段 2/5: 研究团队辩论中..."
                 elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
                 progress_placeholder.progress(progress_value, text=progress_text)
+                
+                # 【并发补单】当流中出现 report 时，代表对应分析师已跑完并发 SubGraph
+                if chunk.get("market_report"): st.session_state.agent_status["市场分析师"] = "completed"
+                if chunk.get("news_report"): st.session_state.agent_status["新闻分析师"] = "completed"
+                if chunk.get("sentiment_report"): st.session_state.agent_status["社交媒体分析师"] = "completed"
+                if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
                 
                 # 更新调试信息
                 st.session_state.last_chunk_raw = {k: "数据过大已脱敏" if k in ["messages", "market_report", "investment_plan", "trader_investment_plan", "final_trade_decision"] else v for k, v in chunk.items()}
