@@ -30,10 +30,14 @@
 本项目是基于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 衍生并进行深度重构优化的增强版本。原项目构筑了优秀的 AI 交易员多智能体框架，本项目在此基础上进行了大量底层架构修复和本土化模型扩展。
 
 ## 🌟 核心增强特性 (New Features by SpaceRexxx)
-- **原生并行化与隔离沙盒引擎**：彻底修复原版多智能体并行运行时的内存污染与幻觉问题，分析师团队实现 100% 稳定的并发。
+- **原生并行化与沙盒引擎**：彻底修复原版多智能体并行运行时的 `INVALID_CONCURRENT_GRAPH_UPDATE` 内存污染与图谱幻觉冲突，四位分析师真正实现 100% 稳定的并发拉取与推演。
 - **全方位大模型支持**：无缝接入 NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI 等本土常用优质前沿模型。
-- **动态 Web UI 面板**：支持通过侧边栏直观地注入不同供应商的 API Key，彻底接管系统环境变量，并引入安全记忆。
-- **稳定性架构重建**：解决原生网络连通性报错（如屏蔽 HTTP/2 降级干扰），重构记忆类（Memory）消除全局变量污染，增强多指标（OBV 等）支持。
+- **动态 Web UI 面板**：支持通过侧边栏直观地注入不同供应商的 API Key，彻底接管系统环境变量。且**分析结尾新增可视化报告渲染与一键导出 PDF 机制**。
+- **底层架构极限重构**：
+  - 屏蔽 HTTP/2 降级干扰解决 `openai.APIConnectionError` 报错。
+  - 重构 `memory.py` 消除全局变量状态逃逸。
+  - 弃用前沿语法，改用原生 `SystemMessage` 对象注入，完美向下兼容旧版本 `langgraph` (解决 `state_modifier` kwargs 报错)。
+  - 强化数据流：增加并修复了 `obv` (能量潮) 等关键指标的数据别名映射。
 
 ---
 
@@ -169,15 +173,18 @@ playwright install-deps
 
 ### 必需的 API (Required APIs)
 
-本深度优化版本（SpaceRexxx 版）通过 WebUI 可以直接在前端注入 API Key，但您依然可以选择通过配置`.env` 文件或全局变量来让后端自动读取默认的 API Key：
+本深度优化版本（SpaceRexxx 版）通过 Web UI 可以直接在前端注入 API Key（会自动留存浏览器缓存），但您依然可以选择通过配置 `.env` 文件或全局变量来让后端自动读取默认的 API Key：
 
 ```bash
-export OPENAI_API_KEY=...          # OpenAI (GPT)
+export OPENAI_API_KEY=...          # OpenAI (GPT系列)
 export DEEPSEEK_API_KEY=...        # DeepSeek
-export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3)
+export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3等，格式通常为 nvapi- 开头)
 export ARK_API_KEY=...             # 火山引擎 (Volcengine)
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 ```
+
+> **💡 模型填写小贴士**：
+> 如果您在使用**火山引擎 (Volcengine)**，在左侧边栏填写模型名称时，必须填写您在火山引擎控制台创建的 **Endpoint ID** (比如 `ep-2026xxxx-xxxx`)，而不是单纯的 "DeepSeek-V3"。
 
 推荐的方法是：将源码目录中的 `.env.example` 复制一份并重命名为 `.env`，然后在其中填入您的密钥：
 ```bash
@@ -195,6 +202,8 @@ streamlit run webapp.py
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
+
+> 🎉 **惊喜体验**：当整套多智能体多轮博弈结束后，Web 页面将会自动调起我们集成的 `Playwright` 引擎，将极长的 markdown 报表全自动转录渲染为优美的 **PDF 研报**。渲染完成后，您可以直接在左下角点击按钮下载！
 
 如果您更喜欢原生的终端流式输出，可以运行 **CLI (命令行) 模式**：
 ```bash
