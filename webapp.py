@@ -18,7 +18,9 @@ import json  # 【新增】
 # 自动加载 .env 文件（兼容未激活 conda 环境的情况）
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env", override=False)
+    _env_path = Path(__file__).parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=True)
 except ImportError:
     pass
 
@@ -422,7 +424,7 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "deep_think_llm": deep_thinker, 
             "backend_url": backend_url, 
             "llm_provider": selected_llm_provider_name.lower(), 
-            "api_key": input_api_key.strip() if input_api_key else None,
+            "api_key": str(input_api_key).strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
             "results_dir": str(RESULTS_DIR) # 确保 config 中有 results_dir
         })

@@ -160,8 +160,14 @@ def select_shallow_thinking_agent(provider) -> str:
             ("Z.AI GLM 4.5 Air (free)", "z-ai/glm-4.5-air:free"),
         ],
         "deepseek": [
-        ("DeepSeek Chat - General purpose, strong reasoning", "deepseek-chat"),
-        ("DeepSeek reasoner - Specialized for reasoner tasks", "deepseek-reasoner"),
+            ("DeepSeek Chat - General purpose, strong reasoning", "deepseek-chat"),
+            ("DeepSeek Reasoner - Specialized for reasoning tasks", "deepseek-reasoner"),
+        ],
+        "nvidia": [
+            ("NVIDIA-DeepSeek-V3", "deepseek-ai/deepseek-v3.2"),
+        ],
+        "volcengine": [
+            ("Seed-2.0 (DeepSeek-V3)", "ep-20260315170816-rdcb9"),
         ],
         "ollama": [
             ("llama3.1 local", "llama3.1"),
@@ -232,9 +238,15 @@ def select_deep_thinking_agent(provider) -> str:
             ("Z.AI GLM 4.5 Air (free)", "z-ai/glm-4.5-air:free"),
             ("NVIDIA Nemotron 3 Nano 30B (free)", "nvidia/nemotron-3-nano-30b-a3b:free"),
         ],
-         "deepseek": [
+        "deepseek": [
             ("DeepSeek Chat - General purpose, strong reasoning", "deepseek-chat"),
-            ("DeepSeek reasoner - Specialized for reasoner tasks", "deepseek-reasoner"),
+            ("DeepSeek Reasoner - Specialized for reasoning tasks", "deepseek-reasoner"),
+        ],
+        "nvidia": [
+            ("NVIDIA-DeepSeek-V3", "deepseek-ai/deepseek-v3.2"),
+        ],
+        "volcengine": [
+            ("Seed-2.0 (DeepSeek-V3 Large)", "ep-20260315170816-rdcb9"),
         ],
         "ollama": [
             ("GLM-4.7-Flash:latest (30B, local)", "glm-4.7-flash:latest"),

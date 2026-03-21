@@ -19,7 +19,8 @@ class FinancialSituationMemory:
         # Case 1: Google
         if "googleapis.com" in backend_url:
             print("--- [DEBUG] Memory: Matched Google logic. ---")
-            google_api_key = os.environ.get("GOOGLE_API_KEY")
+            # 优先使用 config 注入的 key，否则回退到环境变量
+            google_api_key = self.config.get("api_key") or os.environ.get("GOOGLE_API_KEY")
             if not google_api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set for Google provider.")
             embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
@@ -39,43 +40,41 @@ class FinancialSituationMemory:
         else:
             print(f"--- [DEBUG] Memory: Matched OpenAI-compatible logic for URL: {backend_url} ---")
             
-            api_key_to_use = None
+            # 这里的逻辑是：优先使用注入的 api_key
+            api_key_to_use = self.config.get("api_key")
             model_name_to_use = "text-embedding-3-small" # Default model
 
             if "deepseek.com" in backend_url:
                 print("--- [DEBUG] Memory: Specifically identified DeepSeek. ---")
-                api_key_to_use = os.environ.get("DEEPSEEK_API_KEY")
+                if not api_key_to_use: api_key_to_use = os.environ.get("DEEPSEEK_API_KEY")
                 model_name_to_use = "deepseek-text-embedding-v2"
                 if not api_key_to_use:
                     raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
             elif "nvidia.com" in backend_url:
                 print("--- [DEBUG] Memory: Specifically identified NVIDIA. ---")
-                api_key_to_use = os.environ.get("NVIDIA_API_KEY")
-                # NVIDIA NIM 常用嵌入模型，如果用户没配，我们可以尝试降级或使用一个默认名
+                if not api_key_to_use: api_key_to_use = os.environ.get("NVIDIA_API_KEY")
                 model_name_to_use = "nvidia/nv-embedqa-e5-v5" 
                 if not api_key_to_use:
-                    # 尝试降级使用 OpenAI Key（如果用户配置了混合模式）
-                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
                     if api_key_to_use:
                         print("--- [DEBUG] Memory: NVIDIA Key missing, falling back to OpenAI Key for Embeddings. ---")
-                        backend_url = "https://api.openai.com/v1" # 重定向嵌入请求到 OpenAI
+                        backend_url = "https://api.openai.com/v1"
                         model_name_to_use = "text-embedding-3-small"
                     else:
                         raise ValueError("NVIDIA_API_KEY (and OPENAI_API_KEY fallback) not set for NVIDIA provider.")
             elif "volces.com" in backend_url:
                 print("--- [DEBUG] Memory: Specifically identified Volcengine (Ark). ---")
-                api_key_to_use = os.environ.get("ARK_API_KEY")
-                model_name_to_use = "text-embedding-3-small" # 默认先用 OpenAI 格式测试
+                if not api_key_to_use: api_key_to_use = os.environ.get("ARK_API_KEY")
+                model_name_to_use = "text-embedding-3-small" 
                 if not api_key_to_use:
-                    # 尝试从 OpenAI Key 降级
-                    api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                    if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
                     if api_key_to_use:
                         print("--- [DEBUG] Memory: Ark Key missing, falling back to OpenAI Key. ---")
                         backend_url = "https://api.openai.com/v1"
                     else:
                         raise ValueError("ARK_API_KEY (and OPENAI_API_KEY fallback) not set for Volcengine.")
             else: # Default to OpenAI key for others
-                api_key_to_use = os.environ.get("OPENAI_API_KEY")
+                if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
 
             print(f"--- [DEBUG] Memory: Using API Key starting with '{str(api_key_to_use)[:6]}', Model='{model_name_to_use}', URL='{backend_url}' ---")
 
