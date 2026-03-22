@@ -214,13 +214,24 @@ export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 cp .env.example .env
 ```
 
-### 快速开始：使用 Web UI 可视化控制台
 
-运行以下命令即可唤起现代化的动态控制台面板：
+## 🚀 运行项目 (Running the Project)
+
+在运行前，请确保您已经完成了虚拟环境的激活 (`conda activate tradingagents`)。
+
+本优化版支持两种互补的运行方式：
+
+### 1. 启动 Web UI 可视化控制台 (推荐)
+这是最直观的使用方式，支持侧边栏配置 API Key、实时追踪各智能体状态以及一键导出 PDF 研报：
 ```bash
 streamlit run webapp.py
 ```
-在该界面中，您可以在左侧边栏直观地选择大模型提供商（支持 DeepSeek / 火山引擎等）、填入独立配置的 API Key 并立刻开始分析。
+
+### 2. 启动极速 CLI 文本端 (黑客风格)
+如果您倾向于在纯终端环境下工作，CLI 版本提供了完全并行的分析引擎和精美的 Rich 控制台渲染：
+```bash
+python -m cli.main
+```
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
