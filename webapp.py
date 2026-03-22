@@ -281,14 +281,28 @@ def generate_pdf_report(final_state, ticker, analysis_date):
         css = """body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; } h1 { font-size: 22pt; color: #1E293B; text-align: center; } h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;} h3 { font-size: 13pt; color: #475569; margin-top: 20px;} table { border-collapse: collapse; width: 100%; margin-top: 15px; } th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } th { background-color: #f8fafc; font-weight: bold; }"""
         styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
         
-        # 使用同步方式生成 PDF
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            page.set_content(styled_html, wait_until='networkidle') 
-            pdf_bytes = page.pdf(format='A4', margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'})
-            browser.close()
-            return pdf_bytes
+        # 使用独立的子进程生成 PDF，完美避开 Streamlit 自身隐式的 asyncio 事件循环冲突
+        import subprocess
+        import sys
+        
+        script = '''
+import sys
+from playwright.sync_api import sync_playwright
+
+html = sys.stdin.read()
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page()
+    page.set_content(html, wait_until="networkidle")
+    pdf_bytes = page.pdf(format="A4", margin={"top": "1.5cm", "bottom": "1.5cm", "left": "1.5cm", "right": "1.5cm"})
+    browser.close()
+    sys.stdout.buffer.write(pdf_bytes)
+'''
+        proc = subprocess.run([sys.executable, "-c", script], input=styled_html.encode('utf-8'), capture_output=True)
+        if proc.returncode != 0:
+            raise Exception(proc.stderr.decode('utf-8', errors='ignore'))
+        
+        return proc.stdout
             
     except Exception as e:
         error_msg = f"生成 PDF 时出现错误: {str(e)}"
