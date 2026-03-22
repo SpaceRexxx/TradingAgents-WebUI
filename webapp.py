@@ -474,16 +474,6 @@ with st.sidebar:
     if not st.session_state.final_state:
         download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
-    # 【新增】侧边栏调试面板 (始终可见)
-    st.sidebar.markdown("---")
-    st.sidebar.header("🛠️ 调试监控器")
-    with st.sidebar.expander("实时运行指标 (Debug)", expanded=st.session_state.start_analysis):
-        if "last_chunk_raw" in st.session_state:
-            st.write(f"**当前节点:** `{st.session_state.last_chunk_raw.get('sender', '执行中...')}`")
-            st.json(st.session_state.last_chunk_raw)
-        else:
-            st.info("等待分析启动...")
-
     # 【新增】历史记录浏览器
     st.sidebar.markdown("---")
     historical_analyses = load_historical_analyses(RESULTS_DIR)
@@ -559,8 +549,11 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 if chunk.get("sentiment_report"): st.session_state.agent_status["社交媒体分析师"] = "completed"
                 if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
                 
-                # 更新调试信息
-                st.session_state.last_chunk_raw = {k: "数据过大已脱敏" if k in ["messages", "market_report", "investment_plan", "trader_investment_plan", "final_trade_decision"] else v for k, v in chunk.items()}
+                # 优化调试信息：仅保留关键诊断状态，防止屏幕被海量脱敏数据占满
+                st.session_state.last_chunk_raw = {
+                    "当前执行节点": chunk.get("sender", "后台系统轮转"),
+                    "异常中断": "无"
+                }
                 
                 # 辩论轮数监控
                 if "risk_debate_state" in chunk:
@@ -605,6 +598,8 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 st.rerun() # 触发重绘，进入“分析完成”视图
                 
         except Exception as e:
+            if "last_chunk_raw" in st.session_state:
+                st.session_state.last_chunk_raw["异常中断"] = f"是 - {str(e)}"
             st.error(f"❌ 分析出错: {str(e)}")
             with st.expander("🔍 错误详细追踪"):
                 import traceback
@@ -686,7 +681,8 @@ elif st.session_state.final_state:
                             config_for_saving = DEFAULT_CONFIG.copy()
                             config_for_saving.update({"results_dir": str(RESULTS_DIR)})
                             save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
-                            st.toast("分析结果已保存到磁盘！")
+                            st.success(f"💾 **PDF 及分析结果已自动保存至本地目录:** `{RESULTS_DIR / ticker_from_state / date_from_state}`")
+                            st.toast("分析结果与 PDF 已自动持久化！")
                             st.session_state.start_analysis = False # 只有成功才消耗标志
                         else:
                             st.error("⚠️ PDF 字节流为空，生成失败。")
@@ -711,3 +707,13 @@ elif st.session_state.final_state:
 # 3. 初始欢迎屏幕
 else:
     st.info("请在左侧侧边栏配置您的分析参数，然后点击 **“开始分析”**。")
+
+# --- 底部全局调试监控器 ---
+st.markdown("---")
+with st.expander("🛠️ 调试监控器 (精简版)", expanded=st.session_state.get("start_analysis", False)):
+    if "last_chunk_raw" in st.session_state:
+        status_color = "red" if st.session_state.last_chunk_raw.get("异常中断", "无") != "无" else "green"
+        st.markdown(f"**当前执行节点:** `{st.session_state.last_chunk_raw.get('当前执行节点', '正在启动...')}`")
+        st.markdown(f"**系统异常:** :{status_color}[{st.session_state.last_chunk_raw.get('异常中断', '无')}]")
+    else:
+        st.info("休眠中，等待分析指令...")
