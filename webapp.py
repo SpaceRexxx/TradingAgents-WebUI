@@ -82,8 +82,22 @@ SENDER_MAP = {
     "Risky Analyst": "激进型分析师", "Safe Analyst": "保守型分析师",
     "Neutral Analyst": "中立型分析师", "Risk Judge": "投资组合经理"
 }
-# 【新增】结果保存目录
-RESULTS_DIR = Path(DEFAULT_CONFIG.get("results_dir", "./results"))
+# 【修改】初始化 Session State 及其依赖项 (提前到此处)
+if 'ui_prefs' not in st.session_state:
+    PREFS_FILE = ".ui_prefs.json"
+    def _load_prefs():
+        if os.path.exists(PREFS_FILE):
+            try:
+                with open(PREFS_FILE, "r") as f: return json.load(f)
+            except: pass
+        return {}
+    st.session_state.ui_prefs = _load_prefs()
+
+# 【修改】动态获取结果保存目录
+RESULTS_DIR = Path(st.session_state.ui_prefs.get("results_dir", str(DEFAULT_CONFIG.get("results_dir", "./results"))))
+if not RESULTS_DIR.exists():
+    try: RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    except: pass
 
 # --- 初始化 Session State ---
 if 'agent_status' not in st.session_state: st.session_state.agent_status = {}
@@ -298,23 +312,33 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
-    # --- UI 首选项持久化 ---
-    PREFS_FILE = ".ui_prefs.json"
-    def load_prefs():
-        if os.path.exists(PREFS_FILE):
-            try:
-                with open(PREFS_FILE, "r") as f: return json.load(f)
-            except: pass
-        return {}
+    
+    # --- 【新增】报告存储位置选择 ---
+    st.markdown("---")
+    st.subheader("存储位置")
+    saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
+    input_results_dir = st.text_input(
+        "报告保存根目录:", 
+        value=saved_results_dir,
+        help="分析结果（JSON 和 PDF）将存放在此目录下。支持绝对路径。"
+    )
+    
+    # 定义更新首选项的辅助函数 (移动到此处)
     def save_prefs(prefs):
-        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
-        
-    if "ui_prefs" not in st.session_state:
-        st.session_state.ui_prefs = load_prefs()
-        
+        with open(".ui_prefs.json", "w") as f: json.dump(prefs, f)
     def update_pref(key, value):
         st.session_state.ui_prefs[key] = value
         save_prefs(st.session_state.ui_prefs)
+
+    if input_results_dir != saved_results_dir:
+        update_pref("results_dir", input_results_dir)
+        st.info("存储目录已更新，正在重新扫描历史记录...")
+        st.rerun() # 立即重刷以更新 RESULTS_DIR 和扫描列表
+    
+    # 更新全局 RESULTS_DIR 供后续函数使用
+    RESULTS_DIR = Path(input_results_dir)
+
+    # --- UI 首选项持久化 (逻辑已上移) ---
 
     provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "NVIDIA": "https://integrate.api.nvidia.com/v1", "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
     
