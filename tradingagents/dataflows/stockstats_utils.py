@@ -67,15 +67,35 @@ class StockstatsUtils:
             data.to_csv(data_file, index=False)
 
         data = _clean_dataframe(data)
+        
+        # 【关键修复】stockstats 0.6.0+ 解析器对 'date' 列极度敏感
+        #  必须将日期设为索引 (Index) 而非普通列，以避免指标解析时的名称冲突
+        #  同时也统一了日期格式
+        data['date'] = pd.to_datetime(data['date'])
+        data.set_index('date', inplace=True)
+        
+        # 包装为 StockDataFrame
         df = wrap(data)
-        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        
+        # 触发指标计算
+        try:
+            df[indicator]
+        except Exception as e:
+            # 记录详细错误但返回 N/A，防止分析流程中断
+            print(f"Stockstats error for {symbol} {indicator}: {e}")
+            return f"N/A: Error calculating {indicator}"
+
+        # 通过索引进行日期匹配
         curr_date_str = curr_date_dt.strftime("%Y-%m-%d")
-
-        df[indicator]  # trigger stockstats to calculate the indicator
-        matching_rows = df[df["date"].str.startswith(curr_date_str)]
-
-        if not matching_rows.empty:
-            indicator_value = matching_rows[indicator].values[0]
-            return indicator_value
-        else:
-            return "N/A: Not a trading day (weekend or holiday)"
+        
+        # 在索引中寻找匹配日期
+        # index 是 DatetimeIndex，直接按日期字符串筛选
+        try:
+            matching_rows = df[df.index.strftime("%Y-%m-%d") == curr_date_str]
+            if not matching_rows.empty:
+                indicator_value = matching_rows[indicator].values[0]
+                return float(indicator_value) if not pd.isna(indicator_value) else "N/A"
+            else:
+                return "N/A: Not a trading day (weekend or holiday)"
+        except Exception:
+            return "N/A: Date filtering error"
