@@ -14,6 +14,8 @@ import io
 import asyncio
 import os  # 【新增】
 import json  # 【新增】
+import tkinter as tk # 【新增】原生文件夹选择支持
+from tkinter import filedialog
 
 # 自动加载 .env 文件（兼容未激活 conda 环境的情况）
 try:
@@ -316,19 +318,33 @@ with st.sidebar:
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
     st.subheader("存储位置")
-    saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
-    input_results_dir = st.text_input(
-        "报告保存根目录:", 
-        value=saved_results_dir,
-        help="分析结果（JSON 和 PDF）将存放在此目录下。支持绝对路径。"
-    )
-    
-    # 定义更新首选项的辅助函数 (移动到此处)
+    # 定义更新首选项的辅助函数 (已上移)
     def save_prefs(prefs):
         with open(".ui_prefs.json", "w") as f: json.dump(prefs, f)
     def update_pref(key, value):
         st.session_state.ui_prefs[key] = value
         save_prefs(st.session_state.ui_prefs)
+
+    # --- 【新增】原生文件夹选择逻辑 ---
+    col_path, col_btn = st.columns([3, 1])
+    with col_path:
+        input_results_dir = st.text_input(
+            "报告保存根目录:", 
+            value=saved_results_dir,
+            help="分析结果（JSON 和 PDF）将存放在此目录下。支持绝对路径。"
+        )
+    with col_btn:
+        st.write("") # 垂直对齐调整
+        if st.button("📁 选择", help="弹出系统文件夹选择器"):
+            root = tk.Tk()
+            root.withdraw() # 隐藏 tk 主窗口
+            root.attributes('-topmost', True) # 确保窗口在最前 (针对 MacOS 特效)
+            folder_selected = filedialog.askdirectory(initialdir=saved_results_dir)
+            root.destroy()
+            if folder_selected:
+                input_results_dir = folder_selected
+                update_pref("results_dir", folder_selected)
+                st.rerun()
 
     if input_results_dir != saved_results_dir:
         update_pref("results_dir", input_results_dir)
