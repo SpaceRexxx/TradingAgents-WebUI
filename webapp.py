@@ -318,6 +318,8 @@ with st.sidebar:
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
     st.subheader("存储位置")
+    saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
+    
     # 定义更新首选项的辅助函数 (已上移)
     def save_prefs(prefs):
         with open(".ui_prefs.json", "w") as f: json.dump(prefs, f)
