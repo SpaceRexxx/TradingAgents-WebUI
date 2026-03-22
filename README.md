@@ -175,6 +175,25 @@ playwright install-deps
 # sudo apt install fonts-noto-cjk -y
 ```
 
+### 🛠️ 常见安装问题 (Troubleshooting)
+
+如果您在安装过程中遇到以下报错，请参考对应解决方法：
+
+#### 1. Conda 协议未接受 (CondaToSNonInteractiveError)
+**报错现象**：提示 `Terms of Service have not been accepted`。
+**解决方法**：在终端运行以下两条命令以接受服务条款：
+```bash
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+#### 2. 环境激活报错 (CondaError: Run 'conda init')
+**报错现象**：运行 `conda activate` 时提示需要先运行 `conda init`。
+**解决方法**：
+1. 运行初始化命令：`conda init zsh` (MacOS/Linux) 或 `conda init powershell` (Windows)。
+2. **务必关闭当前的终端窗口，重新打开一个新的窗口**后再尝试运行 `conda activate tradingagents`。
+3. 如果依然失败，可以尝试在当前窗口运行：`source ~/.zshrc` (MacOS) 以强制刷新配置。
+
 ### 必需的 API (Required APIs)
 
 本深度优化版本（SpaceRexxx 版）通过 Web UI 可以直接在前端注入 API Key（会自动留存浏览器缓存），但您依然可以选择通过配置 `.env` 文件或全局变量来让后端自动读取默认的 API Key：
