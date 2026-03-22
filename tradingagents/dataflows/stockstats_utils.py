@@ -79,7 +79,11 @@ class StockstatsUtils:
         
         # 触发指标计算
         try:
-            df[indicator]
+            if indicator == 'obv':
+                import numpy as np
+                df['obv'] = (np.sign(df['close'].diff()).fillna(0) * df['volume']).cumsum()
+            else:
+                df[indicator]
         except Exception as e:
             # 记录详细错误但返回 N/A，防止分析流程中断
             print(f"Stockstats error for {symbol} {indicator}: {e}")

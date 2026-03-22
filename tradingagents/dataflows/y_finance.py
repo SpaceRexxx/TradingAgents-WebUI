@@ -343,7 +343,11 @@ def _get_stock_stats_bulk(
     
     # 触发指标计算
     try:
-        df[indicator]
+        if indicator == 'obv':
+            import numpy as np
+            df['obv'] = (np.sign(df['close'].diff()).fillna(0) * df['volume']).cumsum()
+        else:
+            df[indicator]
     except Exception as e:
         print(f"Error calculating {indicator} in bulk for {symbol}: {e}")
         return {} # 返回空字典以触发 fallback
