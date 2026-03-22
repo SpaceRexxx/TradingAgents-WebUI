@@ -24,6 +24,36 @@ try:
 except ImportError:
     pass
 
+# 【新增】更新 .env 文件的辅助函数
+def update_dotenv_file(key_name, value):
+    """持久化保存 API Key 到本地 .env 文件"""
+    env_path = Path(__file__).parent / ".env"
+    lines = []
+    found = False
+    
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+    new_line = f"{key_name}={value}\n"
+    
+    # 查找并替换现有的 Key
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{key_name}="):
+            lines[i] = new_line
+            found = True
+            break
+            
+    if not found:
+        # 如果没找到且 .env 不为空且最后一行没换行，补一个换行
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] = lines[-1] + "\n"
+        lines.append(new_line)
+        
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    return True
+
 # 导入PDF生成库
 import markdown2
 from playwright.async_api import async_playwright
@@ -307,6 +337,22 @@ with st.sidebar:
     if input_api_key != saved_api_key:
         update_pref(pref_api_key_name, input_api_key)
         
+    # 【新增】保存到 .env 的功能
+    env_key_map = {
+        "deepseek": "DEEPSEEK_API_KEY",
+        "nvidia": "NVIDIA_API_KEY",
+        "火山引擎 (volcengine)": "ARK_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "google": "GOOGLE_API_KEY"
+    }
+    target_env_var = env_key_map.get(selected_llm_provider_name.lower())
+    
+    if input_api_key and target_env_var:
+        if st.button(f"💾 保存 {selected_llm_provider_name} Key 到 .env", help="持久化保存到磁盘，下次启动自动加载"):
+            if update_dotenv_file(target_env_var, input_api_key):
+                st.success(f"已成功将 {target_env_var} 保存到 .env！")
+                st.toast("配置已持久化 💾")
+        
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
@@ -354,15 +400,26 @@ with st.sidebar:
     has_position = "已持有" if "是" in position_status_option else "未持有"
     st.markdown("---")
     
-    # 【修改】“开始分析”按钮现在只设置标志
+    # 【修改】“开始分析”前进行前置校验
     if st.button("🚀 开始分析", use_container_width=True):
-        reset_state()
-        # 针对并发模式：一开始就把所有的分析师状态设成进行中
-        for name in selected_analyst_names:
-            st.session_state.agent_status[name] = "in_progress"
-        st.session_state.start_analysis = True
-        st.session_state.has_position = has_position
-        st.rerun() # 立即重跑，进入分析逻辑
+        # 获取当前提供商对应的环境变量名
+        target_env_var = env_key_map.get(selected_llm_provider_name.lower())
+        # 校验：输入框有填 OR 环境变量里有
+        has_key = bool(input_api_key) or (target_env_var and os.environ.get(target_env_var))
+        
+        if not selected_ticker:
+            st.error("请输入股票代码（Ticker），例如 NVDA")
+        elif not has_key:
+            st.error(f"❌ 缺少 API Key！请在左侧填入 {selected_llm_provider_name} 的 Key，或点击下方按钮保存到本地。")
+            st.info("💡 提示：您可以点击侧边栏的『保存到 .env』按钮，这样下次启动就不用再填了。")
+        else:
+            reset_state()
+            # 针对并发模式：一开始就把所有的分析师状态设成进行中
+            for name in selected_analyst_names:
+                st.session_state.agent_status[name] = "in_progress"
+            st.session_state.start_analysis = True
+            st.session_state.has_position = has_position
+            st.rerun() # 立即重跑，进入分析逻辑
         
     st.sidebar.markdown("---")
     st.sidebar.header("下载报告")
