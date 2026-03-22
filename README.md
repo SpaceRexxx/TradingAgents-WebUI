@@ -157,6 +157,15 @@ conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 2. **务必关闭当前的终端窗口，重新打开一个新的窗口**后再尝试运行 `conda activate tradingagents`。
 3. 如果依然失败，可以尝试在当前窗口运行：`source ~/.zshrc` (MacOS) 以强制刷新配置。
 
+#### 3. 分析成功但 PDF 未生成 / 找不到 Executable
+**报错现象**：页面顶部显示“✅ 分析完成”，但**没有出现下载按钮**。如果您滚动到页面最底部，可能会看到发红的报错信息提示：`Executable doesn't exist at /.../headless_shell`。
+**原因与解决方法**：这是因为由于您所处的运行环境只有 Python 包，却没有下载实际的**浏览器内核可执行文件**。
+请务必在您的目标虚拟环境中（确保已经执行过 `conda activate tradingagents`），单独跑一次这个系统级写入命令：
+```bash
+playwright install chromium
+```
+*提示：如果您的环境存在别名或路径隔离，也可以尝试指定绝对路径，例如：`/您的conda环境路径/bin/playwright install chromium`。*
+
 ### 🔄 如何更新 (How to Update)
 如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.6.2+)：
 ```bash
