@@ -56,9 +56,9 @@ def update_dotenv_file(key_name, value):
         f.writelines(lines)
     return True
 
-# 导入PDF生成库
+# 导入PDF生成库 (同步版)
 import markdown2
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 
 # 导入项目核心组件
 from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -262,20 +262,9 @@ def display_full_process_review(final_state):
         with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("safe_history", ""), unsafe_allow_html=True)
         if risk_state.get("judge_decision"): st.success("**最终决策 (投资组合经理):**"); st.markdown(risk_state["judge_decision"], unsafe_allow_html=True)
 
-# ----- PDF 生成方案 (Playwright) -----
-async def _async_generate_pdf_with_playwright(styled_html):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(); page = await browser.new_page()
-        # 注意：这里我们使用 set_content，但如果您的 CSS 依赖外部字体（如 NotoSansSC），
-        # 您可能需要将字体文件托管在某个地方，或者使用 base64 嵌入到 CSS 中。
-        # 为了简单起见，我们假设 Playwright 可以访问本地字体或回退到系统字体。
-        # 一个更健壮的方法是确保 CSS 是完全自包含的。
-        await page.set_content(styled_html, wait_until='networkidle') 
-        pdf_bytes = await page.pdf(format='A4', margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'})
-        await browser.close(); return pdf_bytes
-
+# ----- PDF 生成方案 (Playwright 同步版) -----
 def generate_pdf_report(final_state, ticker, analysis_date):
-    """(修改) 此函数现在只负责生成 PDF 的字节流，不再与 UI 交互"""
+    """(同步版本) 使用 sync_playwright 生成 PDF 字节流，避开 Streamlit 的 asyncio 冲突"""
     try:
         report_parts = [f"<h1>{ticker} 交易分析报告</h1>", f"<p><b>分析日期:</b> {analysis_date}</p><hr>"]
         report_keys_in_order = [("第一阶段：分析师团队报告", [("market_report", "市场分析报告"),("news_report", "新闻分析报告"),("sentiment_report", "社交情绪报告"),("fundamentals_report", "基本面分析报告")]), ("第二阶段：研究团队决策", [("investment_plan", "")]), ("第三阶段：交易团队计划", [("trader_investment_plan", "")]), ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")])]
@@ -288,19 +277,21 @@ def generate_pdf_report(final_state, ticker, analysis_date):
                     else: section_content.append(html_from_md)
             if section_content: report_parts.append(f"<h2>{section_title}</h2>" + "\n".join(section_content))
         html_body = "\n".join(report_parts)
-        # 【修改】使用更通用的字体族以提高 PDF 兼容性，避免依赖本地文件
+        # 使用更通用的字体族以提高 PDF 兼容性
         css = """body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; } h1 { font-size: 22pt; color: #1E293B; text-align: center; } h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;} h3 { font-size: 13pt; color: #475569; margin-top: 20px;} table { border-collapse: collapse; width: 100%; margin-top: 15px; } th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } th { background-color: #f8fafc; font-weight: bold; }"""
         styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
         
-        # 调用异步方法生成 PDF 字节流
-        import asyncio
-        pdf_bytes = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
-        return pdf_bytes
-        
+        # 使用同步方式生成 PDF
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.set_content(styled_html, wait_until='networkidle') 
+            pdf_bytes = page.pdf(format='A4', margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'})
+            browser.close()
+            return pdf_bytes
+            
     except Exception as e:
-        import traceback
         error_msg = f"生成 PDF 时出现错误: {str(e)}"
-        # 【修改】如果是在 Streamlit 环境，尝试直接抛出以触发外部 UI 显示
         raise Exception(error_msg)
 
 # --- UI 组件 (侧边栏) ---
