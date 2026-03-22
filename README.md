@@ -121,7 +121,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 2. **下载并进入项目**:
    ```bash
    git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents
+   cd TradingAgents-WebUI
    ```
 3. **创建虚拟环境并激活**:
    ```bash
@@ -140,7 +140,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 2. **在终端中下载并进入项目**:
    ```powershell
    git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents
+   cd TradingAgents-WebUI
    ```
 3. **创建虚拟环境并激活**:
    ```powershell
