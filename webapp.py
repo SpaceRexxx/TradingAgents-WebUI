@@ -543,6 +543,11 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
                 progress_placeholder.progress(progress_value, text=progress_text)
                 
+                # 为下方的调试监控器预留一个循环内可更新的占位符（仅首次进入时有效）
+                if 'live_debug_placeholder' not in locals():
+                    st.markdown("---")
+                    live_debug_placeholder = st.empty()
+                
                 # 【并发补单】当流中出现 report 时，代表对应分析师已跑完并发 SubGraph
                 if chunk.get("market_report"): st.session_state.agent_status["市场分析师"] = "completed"
                 if chunk.get("news_report"): st.session_state.agent_status["新闻分析师"] = "completed"
@@ -588,6 +593,12 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                     
                 with report_placeholder.container():
                     display_live_report(chunk)
+                
+                with live_debug_placeholder.container():
+                    with st.expander("🛠️ 调试监控器 (精简版)", expanded=True):
+                        status_color = "red" if st.session_state.last_chunk_raw.get("异常中断", "无") != "无" else "green"
+                        st.markdown(f"**当前执行节点:** `{st.session_state.last_chunk_raw.get('当前执行节点', '正在启动...')}`")
+                        st.markdown(f"**系统异常:** :{status_color}[{st.session_state.last_chunk_raw.get('异常中断', '无')}]")
             
             # --- 【修复】正常结束后的状态同步 ---
             if final_chunk_for_state:
