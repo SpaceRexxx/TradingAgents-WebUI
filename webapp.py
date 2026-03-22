@@ -299,9 +299,9 @@ def generate_pdf_report(final_state, ticker, analysis_date):
         
     except Exception as e:
         import traceback
-        error_msg = f"生成 PDF 时导出错误: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)
-        return None
+        error_msg = f"生成 PDF 时出现错误: {str(e)}"
+        # 【修改】如果是在 Streamlit 环境，尝试直接抛出以触发外部 UI 显示
+        raise Exception(error_msg)
 
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
@@ -687,15 +687,23 @@ elif st.session_state.final_state:
                     }
             elif st.session_state.start_analysis:
                 # 磁盘上也没有，且是新跑完的标志，则生成
-                with st.spinner("正在生成并保存 PDF 报告..."):
-                    pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
-                    if pdf_data:
-                        st.session_state.pdf_data = pdf_data
-                        config_for_saving = DEFAULT_CONFIG.copy()
-                        config_for_saving.update({"results_dir": str(RESULTS_DIR)})
-                        save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
-                        st.toast("分析结果已保存到磁盘！")
-                st.session_state.start_analysis = False # 消耗此标志
+                try:
+                    with st.spinner("正在正式生成 PDF 研报... (首次运行可能较慢)"):
+                        pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
+                        if pdf_data:
+                            st.session_state.pdf_data = pdf_data
+                            config_for_saving = DEFAULT_CONFIG.copy()
+                            config_for_saving.update({"results_dir": str(RESULTS_DIR)})
+                            save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
+                            st.toast("分析结果已保存到磁盘！")
+                            st.session_state.start_analysis = False # 只有成功才消耗标志
+                        else:
+                            st.error("⚠️ PDF 字节流为空，生成失败。")
+                except Exception as e:
+                    st.error(f"❌ PDF 生成失败: {e}")
+                    if "Executable doesn't exist" in str(e) or "playwright install" in str(e).lower():
+                        st.info("💡 **解决方法**: 请在终端运行 `playwright install chromium` 以安装浏览器内核。")
+                    # 不消耗 start_analysis 标志，允许用户在环境修复后重试
     
     # 3. 渲染下载按钮或占位符
     if pdf_data:
