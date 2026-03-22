@@ -93,6 +93,7 @@ if 'previous_sender' not in st.session_state: st.session_state.previous_sender =
 if 'show_live_report_view' not in st.session_state: st.session_state.show_live_report_view = False
 if 'start_analysis' not in st.session_state: st.session_state.start_analysis = False # 【修改】确保存在
 if 'current_analysis_paths' not in st.session_state: st.session_state.current_analysis_paths = None # 【新增】
+if 'pdf_data' not in st.session_state: st.session_state.pdf_data = None # 【新增】缓存 PDF 字节流
 
 
 # --- Helper 函数 ---
@@ -106,6 +107,7 @@ def reset_state():
     st.session_state.show_live_report_view = False
     st.session_state.start_analysis = False # 【新增】
     st.session_state.current_analysis_paths = None # 【新增】
+    st.session_state.pdf_data = None # 【新增】
 
 # 【新增】加载历史记录的函数
 def load_historical_analyses(base_dir):
@@ -604,32 +606,44 @@ elif st.session_state.final_state:
     if report_expanders["第四/五阶段：风险管理与最终决策"]:
         with st.expander("第四/五阶段：风险管理与最终决策", expanded=True): st.markdown(final_state["final_trade_decision"], unsafe_allow_html=True)
             
-    # 【修改】下载按钮逻辑
-    pdf_data = None
-    # 检查是否是刚加载的历史记录
-    if st.session_state.current_analysis_paths:
-        pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
-        if pdf_path.exists():
-            with st.spinner(f"正在加载已保存的 PDF: {pdf_path.name}..."):
-                with open(pdf_path, "rb") as f:
+    # 【修改：增强版下载按钮逻辑】
+    pdf_data = st.session_state.get('pdf_data')
+    
+    if not pdf_data:
+        # 1. 如果有明确路径，从磁盘加载
+        if st.session_state.current_analysis_paths:
+            pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
+            if pdf_path.exists():
+                with st.spinner(f"正在从磁盘加载报告..."):
+                    with open(pdf_path, "rb") as f:
+                        pdf_data = f.read()
+                        st.session_state.pdf_data = pdf_data # 缓存
+        
+        # 2. 如果没有路径，但这是新分析刚跑完且 final_state 存在 (或者路径丢失了但磁盘上已有)
+        if not pdf_data and st.session_state.final_state:
+            # 尝试推测路径
+            probable_path = RESULTS_DIR / ticker_from_state / date_from_state / "report.pdf"
+            if probable_path.exists():
+                with open(probable_path, "rb") as f:
                     pdf_data = f.read()
-        else:
-            download_placeholder.error(f"错误: 未找到已保存的 PDF 文件于 {pdf_path}")
-            
-    # 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
-    elif st.session_state.start_analysis:
-        with st.spinner("正在生成并保存 PDF 报告... (这可能需要一点时间)"):
-            pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
-            if pdf_data:
-                # 【调用保存】
-                config_for_saving = DEFAULT_CONFIG.copy()
-                config_for_saving.update({"results_dir": str(RESULTS_DIR)})
-                save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
-                st.toast("分析结果已保存到磁盘！")
-        # 【重要】清除标志，防止重复保存
-        st.session_state.start_analysis = False 
-            
-    # 显示下载按钮
+                    st.session_state.pdf_data = pdf_data
+                    st.session_state.current_analysis_paths = {
+                        'json': str(probable_path.parent / "final_state_report.json"),
+                        'pdf': str(probable_path)
+                    }
+            elif st.session_state.start_analysis:
+                # 磁盘上也没有，且是新跑完的标志，则生成
+                with st.spinner("正在生成并保存 PDF 报告..."):
+                    pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
+                    if pdf_data:
+                        st.session_state.pdf_data = pdf_data
+                        config_for_saving = DEFAULT_CONFIG.copy()
+                        config_for_saving.update({"results_dir": str(RESULTS_DIR)})
+                        save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
+                        st.toast("分析结果已保存到磁盘！")
+                st.session_state.start_analysis = False # 消耗此标志
+    
+    # 3. 渲染下载按钮或占位符
     if pdf_data:
         download_placeholder.download_button(
             label="📄 下载完整PDF报告",
@@ -639,7 +653,6 @@ elif st.session_state.final_state:
             use_container_width=True
         )
     else:
-        # 这是一个捕获逻辑，如果既不是新分析也不是加载的，则不显示按钮
         download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
 # 3. 初始欢迎屏幕
