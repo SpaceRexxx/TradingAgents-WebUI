@@ -332,23 +332,34 @@ def _get_stock_stats_bulk(
             data.to_csv(data_file, index=False)
 
     data = _clean_dataframe(data)
+    
+    # 【关键修复】stockstats 0.6.0+ 解析器对 'date' 列极度敏感
+    #  必须将日期设为索引 (Index) 而非普通列，以避免指标解析时的名称冲突
+    data["date"] = pd.to_datetime(data["date"])
+    data.set_index("date", inplace=True)
+    
+    # 包装为 StockDataFrame
     df = wrap(data)
-    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
     
-    # Calculate the indicator for all rows at once
-    df[indicator]  # This triggers stockstats to calculate the indicator
+    # 触发指标计算
+    try:
+        df[indicator]
+    except Exception as e:
+        print(f"Error calculating {indicator} in bulk for {symbol}: {e}")
+        return {} # 返回空字典以触发 fallback
     
-    # Create a dictionary mapping date strings to indicator values
+    # 遍历计算结果并构建字典
     result_dict = {}
-    for _, row in df.iterrows():
-        date_str = row["date"]
+    for idx, row in df.iterrows():
+        # idx 现在是 Timestamp (由于我们 set_index 了)
+        date_str = idx.strftime("%Y-%m-%d")
         indicator_value = row[indicator]
         
-        # Handle NaN/None values
+        # 处理空值 (NaN/None)
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
-            # 这里的指标数值通常很长（15位小数），截断到 4 位足够分析使用且能节省大量 Token
+            # 截断小数位以节省 Token
             try:
                 val = float(indicator_value)
                 result_dict[date_str] = f"{val:.4f}"
