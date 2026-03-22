@@ -218,3 +218,13 @@ __marimo__/
 # Cache
 **/data_cache/
 .env
+
+# TradingAgents Analysis Results (Privacy)
+results/
+eval_results/
+.ui_prefs.json
+.vscode/
+.idea/
+*.pdf
+# 缓存临时文件
+*.log
