@@ -157,6 +157,16 @@ conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 2. **务必关闭当前的终端窗口，重新打开一个新的窗口**后再尝试运行 `conda activate tradingagents`。
 3. 如果依然失败，可以尝试在当前窗口运行：`source ~/.zshrc` (MacOS) 以强制刷新配置。
 
+### 🔄 如何更新 (How to Update)
+如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.6.2+)：
+```bash
+git fetch --all
+git reset --hard origin/main  # 注意：这会丢弃您本地对代码的修改
+conda activate tradingagents
+pip install -r requirements.txt
+playwright install chromium
+```
+
 ### 必需的 API (Required APIs)
 
 本深度优化版本（SpaceRexxx 版）通过 Web UI 可以直接在前端注入 API Key（会自动留存浏览器缓存），但您依然可以选择通过配置 `.env` 文件或全局变量来让后端自动读取默认的 API Key：
