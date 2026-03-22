@@ -14,8 +14,8 @@ import io
 import asyncio
 import os  # 【新增】
 import json  # 【新增】
-import tkinter as tk # 【新增】原生文件夹选择支持
-from tkinter import filedialog
+import subprocess # 【新增】原生文件夹选择支持 (绕过 macOS 线程限制)
+import platform
 
 # 自动加载 .env 文件（兼容未激活 conda 环境的情况）
 try:
@@ -338,15 +338,27 @@ with st.sidebar:
     with col_btn:
         st.write("") # 垂直对齐调整
         if st.button("📁 选择", help="弹出系统文件夹选择器"):
-            root = tk.Tk()
-            root.withdraw() # 隐藏 tk 主窗口
-            root.attributes('-topmost', True) # 确保窗口在最前 (针对 MacOS 特效)
-            folder_selected = filedialog.askdirectory(initialdir=saved_results_dir)
-            root.destroy()
-            if folder_selected:
-                input_results_dir = folder_selected
-                update_pref("results_dir", folder_selected)
-                st.rerun()
+            try:
+                folder_selected = None
+                # macOS 特化处理：使用 osascript 避开线程陷阱
+                if platform.system() == "Darwin":
+                    script = 'POSIX path of (choose folder with prompt "请选择报告保存目录" default location POSIX file "{}")'.format(os.path.abspath(saved_results_dir))
+                    proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                    if proc.returncode == 0:
+                        folder_selected = proc.stdout.strip()
+                else: 
+                    # 其他系统 (如 Windows)：通过子进程调用 tkinter (不会占死主线程)
+                    cmd = ['python', '-c', f'import tkinter as tk; from tkinter import filedialog; root=tk.Tk(); root.withdraw(); root.attributes("-topmost", True); print(filedialog.askdirectory(initialdir="{saved_results_dir}"))']
+                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                    if proc.returncode == 0:
+                        folder_selected = proc.stdout.strip()
+                
+                if folder_selected:
+                    input_results_dir = folder_selected
+                    update_pref("results_dir", folder_selected)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"无法启动文件夹选择器: {e}")
 
     if input_results_dir != saved_results_dir:
         update_pref("results_dir", input_results_dir)
