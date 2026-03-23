@@ -310,6 +310,14 @@ with sync_playwright() as p:
 
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
+    # 定义更新首选项的辅助函数 (移动到顶部以防引用错误)
+    PREFS_FILE = ".ui_prefs.json"
+    def save_prefs(prefs):
+        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
+    def update_pref(key, value):
+        st.session_state.ui_prefs[key] = value
+        save_prefs(st.session_state.ui_prefs)
+
     st.header("分析配置")
     selected_ticker = st.text_input("请输入股票代码:", value="").upper()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
@@ -336,13 +344,6 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("存储位置")
     saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
-    
-    # 定义更新首选项的辅助函数 (已上移)
-    def save_prefs(prefs):
-        with open(".ui_prefs.json", "w") as f: json.dump(prefs, f)
-    def update_pref(key, value):
-        st.session_state.ui_prefs[key] = value
-        save_prefs(st.session_state.ui_prefs)
 
     # --- 【新增】原生文件夹选择逻辑 ---
     col_path, col_btn = st.columns([3, 1])
