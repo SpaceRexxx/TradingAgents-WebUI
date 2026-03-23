@@ -2,30 +2,7 @@
   <img src="assets/TauricResearch.png" style="width: 60%; height: auto;">
 </p>
 
-<div align="center" style="line-height: 1;">
-  <a href="https://arxiv.org/abs/2412.20138" target="_blank"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2412.20138-B31B1B?logo=arxiv"/></a>
-  <a href="https://discord.com/invite/hk9PGKShPK" target="_blank"><img alt="Discord" src="https://img.shields.io/badge/Discord-TradingResearch-7289da?logo=discord&logoColor=white&color=7289da"/></a>
-  <a href="./assets/wechat.png" target="_blank"><img alt="WeChat" src="https://img.shields.io/badge/WeChat-TauricResearch-brightgreen?logo=wechat&logoColor=white"/></a>
-  <a href="https://x.com/TauricResearch" target="_blank"><img alt="X Follow" src="https://img.shields.io/badge/X-TauricResearch-white?logo=x&logoColor=white"/></a>
-  <br>
-  <a href="https://github.com/TauricResearch/" target="_blank"><img alt="Community" src="https://img.shields.io/badge/Join_GitHub_Community-TauricResearch-14C290?logo=discourse"/></a>
-</div>
-
-<div align="center">
-  <!-- Keep these links. Translations will automatically update with the README. -->
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=de">Deutsch</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=es">Español</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=fr">français</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=ja">日本語</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=ko">한국어</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=pt">Português</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=ru">Русский</a> | 
-  <a href="https://www.readme-i18n.com/TauricResearch/TradingAgents?lang=zh">中文</a>
-</div>
-
----
-
-# 📈 TradingAgents (SpaceRexxx 深度优化版)
+# 📈 TradingAgents (WebUI版)
 
 本项目是基于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 衍生并进行深度重构优化的增强版本。原项目构筑了优秀的 AI 交易员多智能体框架，本项目在此基础上进行了大量底层架构修复和本土化模型扩展。
 
@@ -44,20 +21,6 @@
 ## 更新日志 (News)
 - [2026-03] **TradingAgents SpaceRexxx Fork** 现已深度整合**无缝原生并行执行引擎**以及**火山引擎 (Volcengine) / NVIDIA DeepSeekV3 / OpenAI API** 支持！
 - [2026-03] 上游原版 **TradingAgents v0.2.1** 发布，已覆盖 GPT-5.4、Gemini 3.1 和 Claude 4.6 模型。
-
-<div align="center">
-<a href="https://www.star-history.com/#TauricResearch/TradingAgents&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=TauricResearch/TradingAgents&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=TauricResearch/TradingAgents&type=Date" />
-   <img alt="TradingAgents Star History" src="https://api.star-history.com/svg?repos=TauricResearch/TradingAgents&type=Date" style="width: 80%; height: auto;" />
- </picture>
-</a>
-</div>
-
-> 🎉 **TradingAgents** 现已正式开源！我们收到了许多关于本框架的咨询，感谢社区的极大热情与支持。
->
-> 我们决定将整个 AI 交易员多智能体框架全面开源，期待与您一起构建具有影响力的项目！
 
 <div align="center">
 
@@ -113,7 +76,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 
 本项目强依赖 Python 3.10 及以上环境，并由于集成了全新的 PDF 导出功能，您还需要安装 Playwright 浏览器内核。
 
-### 🍎 macOS (Apple Silicon M1/M2 或 Intel)
+### 🍎 macOS (Apple Silicon M1/M2/M3/M4/M5 或 Intel)
 1. **安装环境管理工具 (Miniconda / Anaconda)**（如已安装可跳过）:
    ```bash
    brew install --cask miniconda
@@ -121,7 +84,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 2. **下载并进入项目**:
    ```bash
    git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents
+   cd TradingAgents-WebUI
    ```
 3. **创建虚拟环境并激活**:
    ```bash
@@ -140,7 +103,7 @@ TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动
 2. **在终端中下载并进入项目**:
    ```powershell
    git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents
+   cd TradingAgents-WebUI
    ```
 3. **创建虚拟环境并激活**:
    ```powershell
@@ -175,6 +138,44 @@ playwright install-deps
 # sudo apt install fonts-noto-cjk -y
 ```
 
+### 🛠️ 常见安装问题 (Troubleshooting)
+
+如果您在安装过程中遇到以下报错，请参考对应解决方法：
+
+#### 1. Conda 协议未接受 (CondaToSNonInteractiveError)
+**报错现象**：提示 `Terms of Service have not been accepted`。
+**解决方法**：在终端运行以下两条命令以接受服务条款：
+```bash
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+#### 2. 环境激活报错 (CondaError: Run 'conda init')
+**报错现象**：运行 `conda activate` 时提示需要先运行 `conda init`。
+**解决方法**：
+1. 运行初始化命令：`conda init zsh` (MacOS/Linux) 或 `conda init powershell` (Windows)。
+2. **务必关闭当前的终端窗口，重新打开一个新的窗口**后再尝试运行 `conda activate tradingagents`。
+3. 如果依然失败，可以尝试在当前窗口运行：`source ~/.zshrc` (MacOS) 以强制刷新配置。
+
+#### 3. 分析成功但 PDF 未生成 / 找不到 Executable
+**报错现象**：页面顶部显示“✅ 分析完成”，但**没有出现下载按钮**。如果您滚动到页面最底部，可能会看到发红的报错信息提示：`Executable doesn't exist at /.../headless_shell`。
+**原因与解决方法**：这是因为由于您所处的运行环境只有 Python 包，却没有下载实际的**浏览器内核可执行文件**。
+请务必在您的目标虚拟环境中（确保已经执行过 `conda activate tradingagents`），单独跑一次这个系统级写入命令：
+```bash
+playwright install chromium
+```
+*提示：如果您的环境存在别名或路径隔离，也可以尝试指定绝对路径，例如：`/您的conda环境路径/bin/playwright install chromium`。*
+
+### 🔄 如何更新 (How to Update)
+如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.7.0)：
+```bash
+git fetch --all
+git reset --hard origin/main  # 注意：这会丢弃您本地对代码的修改
+conda activate tradingagents
+pip install -r requirements.txt
+playwright install chromium
+```
+
 ### 必需的 API (Required APIs)
 
 本深度优化版本（SpaceRexxx 版）通过 Web UI 可以直接在前端注入 API Key（会自动留存浏览器缓存），但您依然可以选择通过配置 `.env` 文件或全局变量来让后端自动读取默认的 API Key：
@@ -187,6 +188,12 @@ export ARK_API_KEY=...             # 火山引擎 (Volcengine)
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 ```
 
+> [!IMPORTANT]
+> **WebUI 秘钥持久化 (v1.6.1 新特性)**：
+> 现在您可以在 WebUI 侧边栏直接输入 Key 并点击 **“保存到 .env”**。
+    - **本地环境**：强烈推荐，可避免重复输入。
+    - **公网/云端环境**：**请勿点击保存**，否则您的 Key 将会被持久化记录在服务器磁盘上，存在泄露风险。
+
 > **💡 模型填写小贴士**：
 > 如果您在使用**火山引擎 (Volcengine)**，在左侧边栏填写模型名称时，必须填写您在火山引擎控制台创建的 **Endpoint ID** (比如 `ep-2026xxxx-xxxx`)，而不是单纯的 "DeepSeek-V3"。
 
@@ -195,13 +202,24 @@ export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 cp .env.example .env
 ```
 
-### 快速开始：使用 Web UI 可视化控制台
 
-运行以下命令即可唤起现代化的动态控制台面板：
+## 🚀 运行项目 (Running the Project)
+
+在运行前，请确保您已经完成了虚拟环境的激活 (`conda activate tradingagents`)。
+
+本优化版支持两种互补的运行方式：
+
+### 1. 启动 Web UI 可视化控制台 (推荐)
+这是最直观的使用方式，支持侧边栏配置 API Key、实时追踪各智能体状态以及一键导出 PDF 研报：
 ```bash
 streamlit run webapp.py
 ```
-在该界面中，您可以在左侧边栏直观地选择大模型提供商（支持 DeepSeek / 火山引擎等）、填入独立配置的 API Key 并立刻开始分析。
+
+### 2. 启动极速 CLI 文本端 (黑客风格)
+如果您倾向于在纯终端环境下工作，CLI 版本提供了完全并行的分析引擎和精美的 Rich 控制台渲染：
+```bash
+python -m cli.main
+```
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
@@ -209,7 +227,26 @@ streamlit run webapp.py
 
 > 🎉 **惊喜体验**：当整套多智能体多轮博弈结束后，Web 页面将会自动调起我们集成的 `Playwright` 引擎，将极长的 markdown 报表全自动转录渲染为优美的 **PDF 研报**。渲染完成后，您可以直接在左下角点击按钮下载！
 
+### 高级功能：极速 CLI 控制台 (Optimized CLI)
 
+如果您更倾向于在命令行中进行沉浸式交易分析，本项目提供了与 WebUI 功能**完全对等**的优化版 CLI。其不仅能在终端实时渲染出精美的控制台界面，更在效率上达到了极致：
+
+**运行命令：**
+```bash
+python -m cli.main
+```
+
+**CLI 核心优化特性：**
+- **⚡ 并发分析启动**：不同于常规 CLI 的串行排队，优化版 CLI 会同步唤起所有选中的分析师团队，实现真正并行的实时进度追踪。
+- **🛰️ 供应商全兼容**：深度适配火山引擎、NVIDIA、DeepSeek、OpenAI 等全部主流供应商。
+- **🔐 动态 Key 注入**：无需手动修改 `.env`，程序启动时会智能检测 Key 状态并支持交互式快速填入与清洗。
+- **📄 自动化 PDF 生成**：CLI 分析一经结束，系统会立即在后台通过 Playwright 完成 PDF 渲染，并保存至 `results/` 目录下。
+
+<p align="center">
+  <img src="assets/cli_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
+</p>
+
+---
 
 ## ⚖️ License & Acknowledgements (版权与致谢)
 

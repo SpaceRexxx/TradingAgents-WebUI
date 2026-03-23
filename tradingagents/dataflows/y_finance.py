@@ -54,8 +54,20 @@ def normalize_ticker(symbol: str) -> str:
         else:
             return f"{code}.SZ"
 
-    # 其他格式（美股、港股等）保持原样
-    return s
+    # 格式5: 港股数字代码（如 0700 或 02015），转换并自动补全 .HK 后缀
+    # Yahoo Finance 对于港股通常期望 4 位数字后缀（如 2015.HK 而非 02015.HK）
+    m = re.match(r'^(\d{4,5})$', s)
+    if m:
+        code = m.group(1)
+        # 如果是 5 位且以 0 开头，去掉首位 0 以适配 yfinance 的 4 位习惯（例如 02015 -> 2015.HK）
+        if len(code) == 5 and code.startswith("0"):
+            code = code[1:]
+        return f"{code.upper()}.HK"
+
+    # 其他格式（美股、日股、韩股等）
+    # 如果用户输入了 7203.T 或 NVDA，直接返回；
+    # 统一转换为大写以确保 yfinance 识别一致性
+    return s.upper()
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
@@ -332,23 +344,38 @@ def _get_stock_stats_bulk(
             data.to_csv(data_file, index=False)
 
     data = _clean_dataframe(data)
+    
+    # 【关键修复】stockstats 0.6.0+ 解析器对 'date' 列极度敏感
+    #  必须将日期设为索引 (Index) 而非普通列，以避免指标解析时的名称冲突
+    data["date"] = pd.to_datetime(data["date"])
+    data.set_index("date", inplace=True)
+    
+    # 包装为 StockDataFrame
     df = wrap(data)
-    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
     
-    # Calculate the indicator for all rows at once
-    df[indicator]  # This triggers stockstats to calculate the indicator
+    # 触发指标计算
+    try:
+        if indicator == 'obv':
+            import numpy as np
+            df['obv'] = (np.sign(df['close'].diff()).fillna(0) * df['volume']).cumsum()
+        else:
+            df[indicator]
+    except Exception as e:
+        print(f"Error calculating {indicator} in bulk for {symbol}: {e}")
+        return {} # 返回空字典以触发 fallback
     
-    # Create a dictionary mapping date strings to indicator values
+    # 遍历计算结果并构建字典
     result_dict = {}
-    for _, row in df.iterrows():
-        date_str = row["Date"]
+    for idx, row in df.iterrows():
+        # idx 现在是 Timestamp (由于我们 set_index 了)
+        date_str = idx.strftime("%Y-%m-%d")
         indicator_value = row[indicator]
         
-        # Handle NaN/None values
+        # 处理空值 (NaN/None)
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
-            # 这里的指标数值通常很长（15位小数），截断到 4 位足够分析使用且能节省大量 Token
+            # 截断小数位以节省 Token
             try:
                 val = float(indicator_value)
                 result_dict[date_str] = f"{val:.4f}"

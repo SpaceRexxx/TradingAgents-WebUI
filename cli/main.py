@@ -5,7 +5,12 @@ from pathlib import Path
 from functools import wraps
 from rich.console import Console
 from dotenv import load_dotenv
-from InquirerPy import inquirer # <-- 修改点 1: 添加此导入
+import questionary
+import markdown2
+from playwright.async_api import async_playwright
+import asyncio
+import os
+import json
 
 # Load environment variables from .env file
 load_dotenv()
@@ -53,7 +58,7 @@ class MessageBuffer:
     # Analyst name mapping
     ANALYST_MAPPING = {
         "market": "Market Analyst",
-        "social": "Social Analyst",
+        "social": "Sentiment Analyst",
         "news": "News Analyst",
         "fundamentals": "Fundamentals Analyst",
     }
@@ -276,15 +281,15 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
         padding=(0, 2),  # Add horizontal padding
         expand=True,  # Make table expand to fill available space
     )
-    progress_table.add_column("Team", style="cyan", justify="center", width=20)
-    progress_table.add_column("Agent", style="green", justify="center", width=20)
+    progress_table.add_column("Team", style="cyan", justify="center", width=25)
+    progress_table.add_column("Agent", style="green", justify="center", width=25)
     progress_table.add_column("Status", style="yellow", justify="center", width=20)
 
     # Group agents by team - filter to only include agents in agent_status
     all_teams = {
         "Analyst Team": [
             "Market Analyst",
-            "Social Analyst",
+            "Sentiment Analyst",
             "News Analyst",
             "Fundamentals Analyst",
         ],
@@ -548,22 +553,50 @@ def get_user_selections():
     # Define the providers and their URLs
     llm_providers = {
         "OpenAI": "https://api.openai.com/v1",
+        "DeepSeek": "https://api.deepseek.com/v1",
+        "NVIDIA": "https://integrate.api.nvidia.com/v1",
+        "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3",
         "Groq": "https://api.groq.com/openai/v1",
-        "LMStudio": "http://localhost:1234/v1",
-        "Ollama": "http://localhost:11434/v1",
         "Anthropic": "https://api.anthropic.com/v1",
         "Google": "https://generativelanguage.googleapis.com/v1",
-        "DeepSeek": "https://api.deepseek.com/v1",  # Added DeepSeek
+        "LMStudio": "http://localhost:1234/v1",
+        "Ollama": "http://localhost:11434/v1",
     }
-
-    # Use inquirer to ask the user to select a provider
-    selected_llm_provider = inquirer.select(
-        message="Select your LLM Provider",
+    
+    # Use questionary to ask the user to select a provider
+    selected_llm_provider = questionary.select(
+        "Select your LLM Provider",
         choices=list(llm_providers.keys()),
         default="OpenAI",
-    ).execute()
+    ).ask()
     
+    if not selected_llm_provider:
+        console.print("[red]No provider selected. Exiting...[/red]")
+        exit(1)
+    
+    provider_key_lower = "volcengine" if "火山引擎" in selected_llm_provider else selected_llm_provider.lower()
     backend_url = llm_providers[selected_llm_provider]
+    
+    # Step 5b: API Key Input (Dynamic)
+    env_key_name = {
+        "openai": "OPENAI_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "nvidia": "NVIDIA_API_KEY",
+        "volcengine": "ARK_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }.get(provider_key_lower)
+    
+    existing_key = os.getenv(env_key_name) if env_key_name else None
+    
+    # Prompt for API Key
+    key_prompt = f"Enter API Key for {selected_llm_provider}"
+    if existing_key:
+        key_prompt += " (Press Enter to use existing from ENV)"
+    
+    input_api_key = typer.prompt(key_prompt, default="", hide_input=True).strip()
+    final_api_key = input_api_key if input_api_key else (existing_key.strip() if existing_key else None)
+    
     console.print(f"You selected: {selected_llm_provider}\tURL: {backend_url}")
     # ----- 结束修改 -----
     
@@ -573,15 +606,14 @@ def get_user_selections():
             "Step 6: Thinking Agents", "Select your thinking agents for analysis"
         )
     )
-    selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
-    selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
+    selected_shallow_thinker = select_shallow_thinking_agent(provider_key_lower)
+    selected_deep_thinker = select_deep_thinking_agent(provider_key_lower)
 
     # Step 7: Provider-specific thinking configuration
     thinking_level = None
     reasoning_effort = None
 
-    provider_lower = selected_llm_provider.lower()
-    if provider_lower == "google":
+    if provider_key_lower == "google":
         console.print(
             create_question_box(
                 "Step 7: Thinking Mode",
@@ -589,7 +621,7 @@ def get_user_selections():
             )
         )
         thinking_level = ask_gemini_thinking_config()
-    elif provider_lower == "openai":
+    elif provider_key_lower == "openai":
         console.print(
             create_question_box(
                 "Step 7: Reasoning Effort",
@@ -603,7 +635,8 @@ def get_user_selections():
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
-        "llm_provider": selected_llm_provider.lower(),
+        "llm_provider": provider_key_lower,
+        "api_key": final_api_key,
         "backend_url": backend_url,
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
@@ -634,6 +667,79 @@ def get_analysis_date():
             console.print(
                 "[red]Error: Invalid date format. Please use YYYY-MM-DD[/red]"
             )
+
+
+async def _async_generate_pdf_with_playwright(styled_html):
+    """Internal helper to generate PDF bytes using Playwright."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        # Wait for the content to be set and network to be idle
+        await page.set_content(styled_html, wait_until='networkidle') 
+        pdf_bytes = await page.pdf(
+            format='A4', 
+            margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'}
+        )
+        await browser.close()
+        return pdf_bytes
+
+def generate_pdf_report(final_state, ticker, analysis_date):
+    """Ported from webapp.py: Generate PDF byte stream from final state."""
+    try:
+        report_parts = [
+            f"<h1>{ticker} 交易分析报告</h1>", 
+            f"<p><b>分析日期:</b> {analysis_date}</p><hr>"
+        ]
+        
+        # Report structure map (same as webapp.py)
+        report_keys_in_order = [
+            ("第一阶段：分析师团队报告", [
+                ("market_report", "市场分析报告"),
+                ("news_report", "新闻分析报告"),
+                ("sentiment_report", "社交情绪报告"),
+                ("fundamentals_report", "基本面分析报告")
+            ]), 
+            ("第二阶段：研究团队决策", [("investment_plan", "")]), 
+            ("第三阶段：交易团队计划", [("trader_investment_plan", "")]), 
+            ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")])
+        ]
+        
+        for section_title, keys in report_keys_in_order:
+            section_content = []
+            for key, sub_title in keys:
+                if final_state.get(key) and final_state[key]:
+                    html_from_md = markdown2.markdown(
+                        final_state[key], 
+                        extras=["tables", "fenced-code-blocks", "header-ids"]
+                    )
+                    if sub_title:
+                        section_content.append(f"<h3>{sub_title}</h3>{html_from_md}")
+                    else:
+                        section_content.append(html_from_md)
+            if section_content:
+                report_parts.append(f"<h2>{section_title}</h2>" + "\n".join(section_content))
+        
+        html_body = "\n".join(report_parts)
+        # Standard refined CSS
+        css = """
+        body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; color: #1a1a1a; }
+        h1 { font-size: 24pt; color: #1E293B; text-align: center; margin-bottom: 30px; }
+        h2 { font-size: 18pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-top: 30px; }
+        h3 { font-size: 14pt; color: #475569; margin-top: 20px; border-left: 4px solid #3b82f6; padding-left: 10px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 15px; margin-bottom: 15px; }
+        th, td { border: 1px solid #e2e8f0; text-align: left; padding: 10px; }
+        th { background-color: #f8fafc; font-weight: bold; }
+        blockquote { border-left: 4px solid #cbd5e1; padding-left: 15px; color: #64748b; font-style: italic; }
+        """
+        styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
+        
+        # Run the async generation synchronously for CLI context
+        pdf_bytes = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
+        return pdf_bytes
+        
+    except Exception as e:
+        console.print(f"[red]Error generating PDF report: {e}[/red]")
+        return None
 
 
 def save_report_to_disk(final_state, ticker: str, save_path: Path):
@@ -720,9 +826,20 @@ def save_report_to_disk(final_state, ticker: str, save_path: Path):
             (portfolio_dir / "decision.md").write_text(risk["judge_decision"])
             sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
 
-    # Write consolidated report
+    # Write consolidated report (Markdown)
     header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    (save_path / "complete_report.md").write_text(header + "\n\n".join(sections))
+    complete_report_content = header + "\n\n".join(sections)
+    (save_path / "complete_report.md").write_text(complete_report_content)
+    
+    # NEW: Generate and save PDF report
+    console.print("[cyan]Generating PDF report via Playwright...[/cyan]")
+    analysis_date = final_state.get('trade_date', datetime.datetime.now().strftime('%Y-%m-%d'))
+    pdf_bytes = generate_pdf_report(final_state, ticker, analysis_date)
+    if pdf_bytes:
+        pdf_file = save_path / "report.pdf"
+        pdf_file.write_bytes(pdf_bytes)
+        console.print(f"[green]✓ PDF report generated:[/green] {pdf_file.name}")
+    
     return save_path / "complete_report.md"
 
 
@@ -798,7 +915,7 @@ def update_research_team_status(status):
 ANALYST_ORDER = ["market", "social", "news", "fundamentals"]
 ANALYST_AGENT_NAMES = {
     "market": "Market Analyst",
-    "social": "Social Analyst",
+    "social": "Sentiment Analyst",
     "news": "News Analyst",
     "fundamentals": "Fundamentals Analyst",
 }
@@ -833,11 +950,9 @@ def update_analyst_statuses(message_buffer, chunk):
         if has_report:
             message_buffer.update_agent_status(agent_name, "completed")
             message_buffer.update_report_section(report_key, chunk[report_key])
-        elif not found_active:
+        else:
             message_buffer.update_agent_status(agent_name, "in_progress")
             found_active = True
-        else:
-            message_buffer.update_agent_status(agent_name, "pending")
 
     # When all analysts complete, transition research team to in_progress
     if not found_active and selected:
@@ -931,6 +1046,7 @@ def run_analysis():
     config["deep_think_llm"] = selections["deep_thinker"]
     config["backend_url"] = selections["backend_url"]
     config["llm_provider"] = selections["llm_provider"].lower()
+    config["api_key"] = selections.get("api_key")
     # Provider-specific thinking configuration
     config["google_thinking_level"] = selections.get("google_thinking_level")
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
@@ -1021,9 +1137,10 @@ def run_analysis():
         )
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
-        # Update agent status to in_progress for the first analyst
-        first_analyst = f"{selections['analysts'][0].value.capitalize()} Analyst"
-        message_buffer.update_agent_status(first_analyst, "in_progress")
+        # Set all selected analysts to in_progress initially to reflect concurrent start
+        for analyst in selections["analysts"]:
+            agent_name = f"{analyst.value.capitalize()} Analyst"
+            message_buffer.update_agent_status(agent_name, "in_progress")
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
         # Create spinner text

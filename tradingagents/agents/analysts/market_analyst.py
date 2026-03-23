@@ -7,6 +7,7 @@ def create_market_analyst(llm):
     def market_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
+        lookback_days = state.get("lookback_days", 30)
 
         tools = [get_stock_data, get_indicators]
 
@@ -28,7 +29,13 @@ def create_market_analyst(llm):
         # 避免在并发模式下污染父图的 Global Messages 导致模型发生幻觉或崩溃
         agent = create_react_agent(llm, tools)
         
-        prompt_content = f"请开始进行深入的市场与技术面分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
+        prompt_content = (
+            f"请开始进行深入的市场与技术面分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。\n"
+            f"**重要指令：**\n"
+            f"1. 请在调用 `get_indicators` 工具时，将 `look_back_days` 参数显式设为 {lookback_days}。\n"
+            f"2. 请在调用 `get_stock_data` 工具时，计算并设置 `start_date`，使其回溯范围至少涵盖过去 {lookback_days} 天的数据。\n"
+            f"注意：不需要向我交代工具调用的话语，直接输出排版精美的中文分析报告和表格即可。"
+        )
         
         # 内部同步阻塞调用该 Agent 完成所有推导工作，向下兼容 LangGraph 低版本
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})

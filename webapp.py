@@ -14,17 +14,51 @@ import io
 import asyncio
 import os  # 【新增】
 import json  # 【新增】
+import subprocess # 【新增】原生文件夹选择支持 (绕过 macOS 线程限制)
+import platform
 
 # 自动加载 .env 文件（兼容未激活 conda 环境的情况）
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env", override=False)
+    _env_path = Path(__file__).parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=True)
 except ImportError:
     pass
 
-# 导入PDF生成库
+# 【新增】更新 .env 文件的辅助函数
+def update_dotenv_file(key_name, value):
+    """持久化保存 API Key 到本地 .env 文件"""
+    env_path = Path(__file__).parent / ".env"
+    lines = []
+    found = False
+    
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+    new_line = f"{key_name}={value}\n"
+    
+    # 查找并替换现有的 Key
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{key_name}="):
+            lines[i] = new_line
+            found = True
+            break
+            
+    if not found:
+        # 如果没找到且 .env 不为空且最后一行没换行，补一个换行
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] = lines[-1] + "\n"
+        lines.append(new_line)
+        
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    return True
+
+# 导入PDF生成库 (同步版)
 import markdown2
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 
 # 导入项目核心组件
 from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -50,8 +84,22 @@ SENDER_MAP = {
     "Risky Analyst": "激进型分析师", "Safe Analyst": "保守型分析师",
     "Neutral Analyst": "中立型分析师", "Risk Judge": "投资组合经理"
 }
-# 【新增】结果保存目录
-RESULTS_DIR = Path(DEFAULT_CONFIG.get("results_dir", "./results"))
+# 【修改】初始化 Session State 及其依赖项 (提前到此处)
+if 'ui_prefs' not in st.session_state:
+    PREFS_FILE = ".ui_prefs.json"
+    def _load_prefs():
+        if os.path.exists(PREFS_FILE):
+            try:
+                with open(PREFS_FILE, "r") as f: return json.load(f)
+            except: pass
+        return {}
+    st.session_state.ui_prefs = _load_prefs()
+
+# 【修改】动态获取结果保存目录
+RESULTS_DIR = Path(st.session_state.ui_prefs.get("results_dir", str(DEFAULT_CONFIG.get("results_dir", "./results"))))
+if not RESULTS_DIR.exists():
+    try: RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    except: pass
 
 # --- 初始化 Session State ---
 if 'agent_status' not in st.session_state: st.session_state.agent_status = {}
@@ -61,6 +109,7 @@ if 'previous_sender' not in st.session_state: st.session_state.previous_sender =
 if 'show_live_report_view' not in st.session_state: st.session_state.show_live_report_view = False
 if 'start_analysis' not in st.session_state: st.session_state.start_analysis = False # 【修改】确保存在
 if 'current_analysis_paths' not in st.session_state: st.session_state.current_analysis_paths = None # 【新增】
+if 'pdf_data' not in st.session_state: st.session_state.pdf_data = None # 【新增】缓存 PDF 字节流
 
 
 # --- Helper 函数 ---
@@ -74,6 +123,7 @@ def reset_state():
     st.session_state.show_live_report_view = False
     st.session_state.start_analysis = False # 【新增】
     st.session_state.current_analysis_paths = None # 【新增】
+    st.session_state.pdf_data = None # 【新增】
 
 # 【新增】加载历史记录的函数
 def load_historical_analyses(base_dir):
@@ -212,20 +262,9 @@ def display_full_process_review(final_state):
         with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("safe_history", ""), unsafe_allow_html=True)
         if risk_state.get("judge_decision"): st.success("**最终决策 (投资组合经理):**"); st.markdown(risk_state["judge_decision"], unsafe_allow_html=True)
 
-# ----- PDF 生成方案 (Playwright) -----
-async def _async_generate_pdf_with_playwright(styled_html):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(); page = await browser.new_page()
-        # 注意：这里我们使用 set_content，但如果您的 CSS 依赖外部字体（如 NotoSansSC），
-        # 您可能需要将字体文件托管在某个地方，或者使用 base64 嵌入到 CSS 中。
-        # 为了简单起见，我们假设 Playwright 可以访问本地字体或回退到系统字体。
-        # 一个更健壮的方法是确保 CSS 是完全自包含的。
-        await page.set_content(styled_html, wait_until='networkidle') 
-        pdf_bytes = await page.pdf(format='A4', margin={'top': '1.5cm', 'bottom': '1.5cm', 'left': '1.5cm', 'right': '1.5cm'})
-        await browser.close(); return pdf_bytes
-
+# ----- PDF 生成方案 (Playwright 同步版) -----
 def generate_pdf_report(final_state, ticker, analysis_date):
-    """(修改) 此函数现在只负责生成 PDF 的字节流，不再与 UI 交互"""
+    """(同步版本) 使用 sync_playwright 生成 PDF 字节流，避开 Streamlit 的 asyncio 冲突"""
     try:
         report_parts = [f"<h1>{ticker} 交易分析报告</h1>", f"<p><b>分析日期:</b> {analysis_date}</p><hr>"]
         report_keys_in_order = [("第一阶段：分析师团队报告", [("market_report", "市场分析报告"),("news_report", "新闻分析报告"),("sentiment_report", "社交情绪报告"),("fundamentals_report", "基本面分析报告")]), ("第二阶段：研究团队决策", [("investment_plan", "")]), ("第三阶段：交易团队计划", [("trader_investment_plan", "")]), ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")])]
@@ -238,23 +277,47 @@ def generate_pdf_report(final_state, ticker, analysis_date):
                     else: section_content.append(html_from_md)
             if section_content: report_parts.append(f"<h2>{section_title}</h2>" + "\n".join(section_content))
         html_body = "\n".join(report_parts)
-        # 【修改】使用更通用的字体族以提高 PDF 兼容性，避免依赖本地文件
+        # 使用更通用的字体族以提高 PDF 兼容性
         css = """body { font-family: sans-serif; font-size: 10pt; line-height: 1.6; } h1 { font-size: 22pt; color: #1E293B; text-align: center; } h2 { font-size: 16pt; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; margin-top: 25px;} h3 { font-size: 13pt; color: #475569; margin-top: 20px;} table { border-collapse: collapse; width: 100%; margin-top: 15px; } th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } th { background-color: #f8fafc; font-weight: bold; }"""
         styled_html = f"<html><head><meta charset='UTF-8'><style>{css}</style></head><body>{html_body}</body></html>"
         
-        # 调用异步方法生成 PDF 字节流
-        import asyncio
-        pdf_bytes = asyncio.run(_async_generate_pdf_with_playwright(styled_html))
-        return pdf_bytes
+        # 使用独立的子进程生成 PDF，完美避开 Streamlit 自身隐式的 asyncio 事件循环冲突
+        import subprocess
+        import sys
         
+        script = '''
+import sys
+from playwright.sync_api import sync_playwright
+
+html = sys.stdin.read()
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page()
+    page.set_content(html, wait_until="networkidle")
+    pdf_bytes = page.pdf(format="A4", margin={"top": "1.5cm", "bottom": "1.5cm", "left": "1.5cm", "right": "1.5cm"})
+    browser.close()
+    sys.stdout.buffer.write(pdf_bytes)
+'''
+        proc = subprocess.run([sys.executable, "-c", script], input=styled_html.encode('utf-8'), capture_output=True)
+        if proc.returncode != 0:
+            raise Exception(proc.stderr.decode('utf-8', errors='ignore'))
+        
+        return proc.stdout
+            
     except Exception as e:
-        import traceback
-        error_msg = f"生成 PDF 时导出错误: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)
-        return None
+        error_msg = f"生成 PDF 时出现错误: {str(e)}"
+        raise Exception(error_msg)
 
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
+    # 定义更新首选项的辅助函数 (移动到顶部以防引用错误)
+    PREFS_FILE = ".ui_prefs.json"
+    def save_prefs(prefs):
+        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
+    def update_pref(key, value):
+        st.session_state.ui_prefs[key] = value
+        save_prefs(st.session_state.ui_prefs)
+
     st.header("分析配置")
     selected_ticker = st.text_input("请输入股票代码:", value="").upper()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
@@ -264,23 +327,78 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
-    # --- UI 首选项持久化 ---
-    PREFS_FILE = ".ui_prefs.json"
-    def load_prefs():
-        if os.path.exists(PREFS_FILE):
+
+    # 【新增】回溯天数选择
+    saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+    selected_lookback_days = st.slider(
+        "分析回溯窗口 (天):", 
+        min_value=5, 
+        max_value=120, 
+        value=saved_lookback,
+        help="设定 AI 分析技术指标和价格走势时向回搜索的时间范围（自然日）。"
+    )
+    if selected_lookback_days != saved_lookback:
+        update_pref("lookback_days", selected_lookback_days)
+    
+    # 【新增】新闻/情绪回溯天数选择
+    saved_news_lookback = st.session_state.ui_prefs.get("news_lookback_days", 7)
+    selected_news_lookback_days = st.slider(
+        "新闻/情绪分析窗口 (天):", 
+        min_value=1, 
+        max_value=30, 
+        value=saved_news_lookback,
+        help="设定 AI 分析新闻和社交媒体情绪时向回搜索的时间范围（自然日）。"
+    )
+    if selected_news_lookback_days != saved_news_lookback:
+        update_pref("news_lookback_days", selected_news_lookback_days)
+    
+    # --- 【新增】报告存储位置选择 ---
+    st.markdown("---")
+    st.subheader("存储位置")
+    saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
+
+    # --- 【新增】原生文件夹选择逻辑 ---
+    col_path, col_btn = st.columns([3, 1])
+    with col_path:
+        input_results_dir = st.text_input(
+            "报告保存根目录:", 
+            value=saved_results_dir,
+            help="分析结果（JSON 和 PDF）将存放在此目录下。支持绝对路径。"
+        )
+    with col_btn:
+        st.write("") # 垂直对齐调整
+        if st.button("📁 选择", help="弹出系统文件夹选择器"):
             try:
-                with open(PREFS_FILE, "r") as f: return json.load(f)
-            except: pass
-        return {}
-    def save_prefs(prefs):
-        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
-        
-    if "ui_prefs" not in st.session_state:
-        st.session_state.ui_prefs = load_prefs()
-        
-    def update_pref(key, value):
-        st.session_state.ui_prefs[key] = value
-        save_prefs(st.session_state.ui_prefs)
+                folder_selected = None
+                # macOS 特化处理：使用 osascript 避开线程陷阱
+                if platform.system() == "Darwin":
+                    script = 'POSIX path of (choose folder with prompt "请选择报告保存目录" default location POSIX file "{}")'.format(os.path.abspath(saved_results_dir))
+                    proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                    if proc.returncode == 0:
+                        folder_selected = proc.stdout.strip()
+                else: 
+                    # 其他系统 (如 Windows)：通过子进程调用 tkinter (不会占死主线程)
+                    cmd = ['python', '-c', f'import tkinter as tk; from tkinter import filedialog; root=tk.Tk(); root.withdraw(); root.attributes("-topmost", True); print(filedialog.askdirectory(initialdir="{saved_results_dir}"))']
+                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                    if proc.returncode == 0:
+                        folder_selected = proc.stdout.strip()
+                
+                if folder_selected:
+                    input_results_dir = folder_selected
+                    update_pref("results_dir", folder_selected)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"无法启动文件夹选择器: {e}")
+
+    if input_results_dir != saved_results_dir:
+        update_pref("results_dir", input_results_dir)
+        st.info("存储目录已更新，正在重新扫描历史记录...")
+        st.rerun() # 立即重刷以更新 RESULTS_DIR 和扫描列表
+    
+    # 更新全局 RESULTS_DIR 供后续函数使用
+    RESULTS_DIR = Path(input_results_dir)
+
+    # --- UI 首选项持久化 (逻辑已上移) ---
 
     provider_options = {"DeepSeek": "https://api.deepseek.com/v1", "NVIDIA": "https://integrate.api.nvidia.com/v1", "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3", "OpenAI": "https://api.openai.com/v1", "Google": "https://generativelen/v1"}
     
@@ -304,6 +422,22 @@ with st.sidebar:
     )
     if input_api_key != saved_api_key:
         update_pref(pref_api_key_name, input_api_key)
+        
+    # 【新增】保存到 .env 的功能
+    env_key_map = {
+        "deepseek": "DEEPSEEK_API_KEY",
+        "nvidia": "NVIDIA_API_KEY",
+        "火山引擎 (volcengine)": "ARK_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "google": "GOOGLE_API_KEY"
+    }
+    target_env_var = env_key_map.get(selected_llm_provider_name.lower())
+    
+    if input_api_key and target_env_var:
+        if st.button(f"💾 保存 {selected_llm_provider_name} Key 到 .env", help="持久化保存到磁盘，下次启动自动加载"):
+            if update_dotenv_file(target_env_var, input_api_key):
+                st.success(f"已成功将 {target_env_var} 保存到 .env！")
+                st.toast("配置已持久化 💾")
         
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
@@ -352,31 +486,32 @@ with st.sidebar:
     has_position = "已持有" if "是" in position_status_option else "未持有"
     st.markdown("---")
     
-    # 【修改】“开始分析”按钮现在只设置标志
+    # 【修改】“开始分析”前进行前置校验
     if st.button("🚀 开始分析", use_container_width=True):
-        reset_state()
-        # 针对并发模式：一开始就把所有的分析师状态设成进行中
-        for name in selected_analyst_names:
-            st.session_state.agent_status[name] = "in_progress"
-        st.session_state.start_analysis = True
-        st.session_state.has_position = has_position
-        st.rerun() # 立即重跑，进入分析逻辑
+        # 获取当前提供商对应的环境变量名
+        target_env_var = env_key_map.get(selected_llm_provider_name.lower())
+        # 校验：输入框有填 OR 环境变量里有
+        has_key = bool(input_api_key) or (target_env_var and os.environ.get(target_env_var))
+        
+        if not selected_ticker:
+            st.error("请输入股票代码（Ticker），例如 NVDA")
+        elif not has_key:
+            st.error(f"❌ 缺少 API Key！请在左侧填入 {selected_llm_provider_name} 的 Key，或点击下方按钮保存到本地。")
+            st.info("💡 提示：您可以点击侧边栏的『保存到 .env』按钮，这样下次启动就不用再填了。")
+        else:
+            reset_state()
+            # 针对并发模式：一开始就把所有的分析师状态设成进行中
+            for name in selected_analyst_names:
+                st.session_state.agent_status[name] = "in_progress"
+            st.session_state.start_analysis = True
+            st.session_state.has_position = has_position
+            st.rerun() # 立即重跑，进入分析逻辑
         
     st.sidebar.markdown("---")
     st.sidebar.header("下载报告")
     download_placeholder = st.sidebar.empty()
     if not st.session_state.final_state:
         download_placeholder.info("分析完成后，将在此处提供下载链接。")
-
-    # 【新增】侧边栏调试面板 (始终可见)
-    st.sidebar.markdown("---")
-    st.sidebar.header("🛠️ 调试监控器")
-    with st.sidebar.expander("实时运行指标 (Debug)", expanded=st.session_state.start_analysis):
-        if "last_chunk_raw" in st.session_state:
-            st.write(f"**当前节点:** `{st.session_state.last_chunk_raw.get('sender', '执行中...')}`")
-            st.json(st.session_state.last_chunk_raw)
-        else:
-            st.info("等待分析启动...")
 
     # 【新增】历史记录浏览器
     st.sidebar.markdown("---")
@@ -422,14 +557,21 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "deep_think_llm": deep_thinker, 
             "backend_url": backend_url, 
             "llm_provider": selected_llm_provider_name.lower(), 
-            "api_key": input_api_key.strip() if input_api_key else None,
+            "api_key": str(input_api_key).strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
-            "results_dir": str(RESULTS_DIR) # 确保 config 中有 results_dir
+            "results_dir": str(RESULTS_DIR), # 确保 config 中有 results_dir
+            "lookback_days": selected_lookback_days,
+            "news_lookback_days": selected_news_lookback_days
         })
         
         with st.spinner("正在初始化分析图..."):
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
-            init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date)
+            init_agent_state = graph.propagator.create_initial_state(
+                selected_ticker, 
+                analysis_date, 
+                selected_lookback_days,
+                selected_news_lookback_days
+            )
             args = graph.propagator.get_graph_args()
             
 
@@ -447,14 +589,22 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
                 progress_placeholder.progress(progress_value, text=progress_text)
                 
+                # 为下方的调试监控器预留一个循环内可更新的占位符（仅首次进入时有效）
+                if 'live_debug_placeholder' not in locals():
+                    st.markdown("---")
+                    live_debug_placeholder = st.empty()
+                
                 # 【并发补单】当流中出现 report 时，代表对应分析师已跑完并发 SubGraph
                 if chunk.get("market_report"): st.session_state.agent_status["市场分析师"] = "completed"
                 if chunk.get("news_report"): st.session_state.agent_status["新闻分析师"] = "completed"
                 if chunk.get("sentiment_report"): st.session_state.agent_status["社交媒体分析师"] = "completed"
                 if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
                 
-                # 更新调试信息
-                st.session_state.last_chunk_raw = {k: "数据过大已脱敏" if k in ["messages", "market_report", "investment_plan", "trader_investment_plan", "final_trade_decision"] else v for k, v in chunk.items()}
+                # 优化调试信息：仅保留关键诊断状态，防止屏幕被海量脱敏数据占满
+                st.session_state.last_chunk_raw = {
+                    "当前执行节点": chunk.get("sender", "后台系统轮转"),
+                    "异常中断": "无"
+                }
                 
                 # 辩论轮数监控
                 if "risk_debate_state" in chunk:
@@ -489,6 +639,12 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                     
                 with report_placeholder.container():
                     display_live_report(chunk)
+                
+                with live_debug_placeholder.container():
+                    with st.expander("🛠️ 调试监控器 (精简版)", expanded=True):
+                        status_color = "red" if st.session_state.last_chunk_raw.get("异常中断", "无") != "无" else "green"
+                        st.markdown(f"**当前执行节点:** `{st.session_state.last_chunk_raw.get('当前执行节点', '正在启动...')}`")
+                        st.markdown(f"**系统异常:** :{status_color}[{st.session_state.last_chunk_raw.get('异常中断', '无')}]")
             
             # --- 【修复】正常结束后的状态同步 ---
             if final_chunk_for_state:
@@ -499,6 +655,8 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 st.rerun() # 触发重绘，进入“分析完成”视图
                 
         except Exception as e:
+            if "last_chunk_raw" in st.session_state:
+                st.session_state.last_chunk_raw["异常中断"] = f"是 - {str(e)}"
             st.error(f"❌ 分析出错: {str(e)}")
             with st.expander("🔍 错误详细追踪"):
                 import traceback
@@ -545,32 +703,53 @@ elif st.session_state.final_state:
     if report_expanders["第四/五阶段：风险管理与最终决策"]:
         with st.expander("第四/五阶段：风险管理与最终决策", expanded=True): st.markdown(final_state["final_trade_decision"], unsafe_allow_html=True)
             
-    # 【修改】下载按钮逻辑
-    pdf_data = None
-    # 检查是否是刚加载的历史记录
-    if st.session_state.current_analysis_paths:
-        pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
-        if pdf_path.exists():
-            with st.spinner(f"正在加载已保存的 PDF: {pdf_path.name}..."):
-                with open(pdf_path, "rb") as f:
+    # 【修改：增强版下载按钮逻辑】
+    pdf_data = st.session_state.get('pdf_data')
+    
+    if not pdf_data:
+        # 1. 如果有明确路径，从磁盘加载
+        if st.session_state.current_analysis_paths:
+            pdf_path = Path(st.session_state.current_analysis_paths['pdf'])
+            if pdf_path.exists():
+                with st.spinner(f"正在从磁盘加载报告..."):
+                    with open(pdf_path, "rb") as f:
+                        pdf_data = f.read()
+                        st.session_state.pdf_data = pdf_data # 缓存
+        
+        # 2. 如果没有路径，但这是新分析刚跑完且 final_state 存在 (或者路径丢失了但磁盘上已有)
+        if not pdf_data and st.session_state.final_state:
+            # 尝试推测路径
+            probable_path = RESULTS_DIR / ticker_from_state / date_from_state / "report.pdf"
+            if probable_path.exists():
+                with open(probable_path, "rb") as f:
                     pdf_data = f.read()
-        else:
-            download_placeholder.error(f"错误: 未找到已保存的 PDF 文件于 {pdf_path}")
-            
-    # 检查是否是刚完成的新分析 (由 start_analysis 标志判断)
-    elif st.session_state.start_analysis:
-        with st.spinner("正在生成并保存 PDF 报告... (这可能需要一点时间)"):
-            pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
-            if pdf_data:
-                # 【调用保存】
-                config_for_saving = DEFAULT_CONFIG.copy()
-                config_for_saving.update({"results_dir": str(RESULTS_DIR)})
-                save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
-                st.toast("分析结果已保存到磁盘！")
-        # 【重要】清除标志，防止重复保存
-        st.session_state.start_analysis = False 
-            
-    # 显示下载按钮
+                    st.session_state.pdf_data = pdf_data
+                    st.session_state.current_analysis_paths = {
+                        'json': str(probable_path.parent / "final_state_report.json"),
+                        'pdf': str(probable_path)
+                    }
+            elif st.session_state.start_analysis:
+                # 磁盘上也没有，且是新跑完的标志，则生成
+                try:
+                    with st.spinner("正在正式生成 PDF 研报... (首次运行可能较慢)"):
+                        pdf_data = generate_pdf_report(final_state, ticker_from_state, date_from_state)
+                        if pdf_data:
+                            st.session_state.pdf_data = pdf_data
+                            config_for_saving = DEFAULT_CONFIG.copy()
+                            config_for_saving.update({"results_dir": str(RESULTS_DIR)})
+                            save_analysis_results(final_state, ticker_from_state, date_from_state, config_for_saving, pdf_data)
+                            st.success(f"💾 **PDF 及分析结果已自动保存至本地目录:** `{RESULTS_DIR / ticker_from_state / date_from_state}`")
+                            st.toast("分析结果与 PDF 已自动持久化！")
+                            st.session_state.start_analysis = False # 只有成功才消耗标志
+                        else:
+                            st.error("⚠️ PDF 字节流为空，生成失败。")
+                except Exception as e:
+                    st.error(f"❌ PDF 生成失败: {e}")
+                    if "Executable doesn't exist" in str(e) or "playwright install" in str(e).lower():
+                        st.info("💡 **解决方法**: 请在终端运行 `playwright install chromium` 以安装浏览器内核。")
+                    # 不消耗 start_analysis 标志，允许用户在环境修复后重试
+    
+    # 3. 渲染下载按钮或占位符
     if pdf_data:
         download_placeholder.download_button(
             label="📄 下载完整PDF报告",
@@ -580,9 +759,18 @@ elif st.session_state.final_state:
             use_container_width=True
         )
     else:
-        # 这是一个捕获逻辑，如果既不是新分析也不是加载的，则不显示按钮
         download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
 # 3. 初始欢迎屏幕
 else:
     st.info("请在左侧侧边栏配置您的分析参数，然后点击 **“开始分析”**。")
+
+# --- 底部全局调试监控器 ---
+st.markdown("---")
+with st.expander("🛠️ 调试监控器 (精简版)", expanded=st.session_state.get("start_analysis", False)):
+    if "last_chunk_raw" in st.session_state:
+        status_color = "red" if st.session_state.last_chunk_raw.get("异常中断", "无") != "无" else "green"
+        st.markdown(f"**当前执行节点:** `{st.session_state.last_chunk_raw.get('当前执行节点', '正在启动...')}`")
+        st.markdown(f"**系统异常:** :{status_color}[{st.session_state.last_chunk_raw.get('异常中断', '无')}]")
+    else:
+        st.info("休眠中，等待分析指令...")
