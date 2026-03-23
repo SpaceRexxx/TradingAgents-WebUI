@@ -340,6 +340,18 @@ with st.sidebar:
     if selected_lookback_days != saved_lookback:
         update_pref("lookback_days", selected_lookback_days)
     
+    # 【新增】新闻/情绪回溯天数选择
+    saved_news_lookback = st.session_state.ui_prefs.get("news_lookback_days", 7)
+    selected_news_lookback_days = st.slider(
+        "新闻/情绪分析窗口 (天):", 
+        min_value=1, 
+        max_value=30, 
+        value=saved_news_lookback,
+        help="设定 AI 分析新闻和社交媒体情绪时向回搜索的时间范围（自然日）。"
+    )
+    if selected_news_lookback_days != saved_news_lookback:
+        update_pref("news_lookback_days", selected_news_lookback_days)
+    
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
     st.subheader("存储位置")
@@ -548,12 +560,18 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "api_key": str(input_api_key).strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
             "results_dir": str(RESULTS_DIR), # 确保 config 中有 results_dir
-            "lookback_days": selected_lookback_days
+            "lookback_days": selected_lookback_days,
+            "news_lookback_days": selected_news_lookback_days
         })
         
         with st.spinner("正在初始化分析图..."):
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
-            init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date, selected_lookback_days)
+            init_agent_state = graph.propagator.create_initial_state(
+                selected_ticker, 
+                analysis_date, 
+                selected_lookback_days,
+                selected_news_lookback_days
+            )
             args = graph.propagator.get_graph_args()
             
 
