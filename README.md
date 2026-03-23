@@ -167,7 +167,7 @@ playwright install chromium
 *提示：如果您的环境存在别名或路径隔离，也可以尝试指定绝对路径，例如：`/您的conda环境路径/bin/playwright install chromium`。*
 
 ### 🔄 如何更新 (How to Update)
-如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.6.2+)：
+如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.7.0)：
 ```bash
 git fetch --all
 git reset --hard origin/main  # 注意：这会丢弃您本地对代码的修改
