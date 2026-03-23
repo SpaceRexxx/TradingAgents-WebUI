@@ -54,8 +54,16 @@ def normalize_ticker(symbol: str) -> str:
         else:
             return f"{code}.SZ"
 
-    # 其他格式（美股、港股等）保持原样
-    return s
+    # 格式5: 港股纯数字（如 0700），自动补全 .HK 后缀
+    # 港股代码通常为 4-5 位数字
+    m = re.match(r'^(\d{4,5})$', s)
+    if m:
+        return f"{s}.HK"
+
+    # 其他格式（美股、日股、韩股等）
+    # 如果用户输入了 7203.T 或 NVDA，直接返回；
+    # 统一转换为大写以确保 yfinance 识别一致性
+    return s.upper()
 
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
