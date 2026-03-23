@@ -54,6 +54,7 @@ class AgentState(MessagesState):
     company_of_interest: Annotated[str, "我们感兴趣的交易公司"]
     trade_date: Annotated[str, "我们进行交易的日期"]
     lookback_days: Annotated[int, "历史回溯天数范围"]
+    news_lookback_days: Annotated[int, "新闻/情绪回溯天数范围"]
 
     sender: Annotated[str, update_last]
 
