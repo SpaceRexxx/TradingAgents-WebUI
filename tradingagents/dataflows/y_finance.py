@@ -54,11 +54,15 @@ def normalize_ticker(symbol: str) -> str:
         else:
             return f"{code}.SZ"
 
-    # 格式5: 港股纯数字（如 0700），自动补全 .HK 后缀
-    # 港股代码通常为 4-5 位数字
+    # 格式5: 港股数字代码（如 0700 或 02015），转换并自动补全 .HK 后缀
+    # Yahoo Finance 对于港股通常期望 4 位数字后缀（如 2015.HK 而非 02015.HK）
     m = re.match(r'^(\d{4,5})$', s)
     if m:
-        return f"{s}.HK"
+        code = m.group(1)
+        # 如果是 5 位且以 0 开头，去掉首位 0 以适配 yfinance 的 4 位习惯（例如 02015 -> 2015.HK）
+        if len(code) == 5 and code.startswith("0"):
+            code = code[1:]
+        return f"{code.upper()}.HK"
 
     # 其他格式（美股、日股、韩股等）
     # 如果用户输入了 7203.T 或 NVDA，直接返回；
