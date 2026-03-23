@@ -319,6 +319,18 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
+
+    # 【新增】回溯天数选择
+    saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+    selected_lookback_days = st.slider(
+        "分析回溯窗口 (天):", 
+        min_value=5, 
+        max_value=120, 
+        value=saved_lookback,
+        help="设定 AI 分析技术指标和价格走势时向回搜索的时间范围（自然日）。"
+    )
+    if selected_lookback_days != saved_lookback:
+        update_pref("lookback_days", selected_lookback_days)
     
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
@@ -534,12 +546,13 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "llm_provider": selected_llm_provider_name.lower(), 
             "api_key": str(input_api_key).strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
-            "results_dir": str(RESULTS_DIR) # 确保 config 中有 results_dir
+            "results_dir": str(RESULTS_DIR), # 确保 config 中有 results_dir
+            "lookback_days": selected_lookback_days
         })
         
         with st.spinner("正在初始化分析图..."):
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
-            init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date)
+            init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date, selected_lookback_days)
             args = graph.propagator.get_graph_args()
             
 
