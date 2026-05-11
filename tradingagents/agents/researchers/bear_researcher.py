@@ -1,9 +1,7 @@
-from langchain_core.messages import AIMessage
-import time
-import json
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 
-def create_bear_researcher(llm, memory):
+def create_bear_researcher(llm):
     def bear_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]
         history = investment_debate_state.get("history", "")
@@ -15,18 +13,6 @@ def create_bear_researcher(llm, memory):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
-
-        past_memory_str = ""
-        if past_memories:
-            for i, rec in enumerate(past_memories, 1):
-                past_memory_str += rec.get("recommendation", "") + "\n\n"
-        
-        if not past_memory_str:
-            past_memory_str = "未找到相关历史交易记忆。"
-
-        # ----- START: 中文翻译和指令修改 -----
         prompt = f"""你是一名空头分析师，任务是提出反对投资该股票的论据。你的目标是提出一个有理有据的论点，强调风险、挑战和负面指标。请利用所提供的研究和数据，有效地突出潜在的下行风险并反驳看涨的论点。
 
 重点关注的关键点：
@@ -45,18 +31,14 @@ def create_bear_researcher(llm, memory):
 公司基本面报告: {fundamentals_report}
 辩论的对话历史: {history}
 多头分析师的最新论点: {current_response}
-从类似情况中获得的反思和经验教训: {past_memory_str}
 
-请利用这些信息，提出一个令人信服的看空论点，反驳多头的说法，并参与一场动态辩论，以展示投资该股票的风险和弱点。你还必须回顾反思，并从过去的错误中吸取教训。
+请利用这些信息，提出一个令人信服的看空论点，反驳多头的说法，并参与一场动态辩论，以展示投资该股票的风险和弱点。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**"""
-        # ----- END OF MODIFICATION -----
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 
-        # ----- START: 将输出前缀也改为中文 -----
         argument = f"Bear Analyst: {response.content}"
-        # ----- END OF MODIFICATION -----
 
         new_investment_debate_state = {
             "history": history + "\n" + argument,

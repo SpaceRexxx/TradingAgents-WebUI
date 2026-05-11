@@ -1,12 +1,18 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
-from tradingagents.agents.utils.agent_utils import get_stock_data, get_indicators
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_indicators,
+    get_language_instruction,
+    get_stock_data,
+)
 
 def create_market_analyst(llm):
 
     def market_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
+        instrument_context = build_instrument_context(ticker)
 
         tools = [get_stock_data, get_indicators]
 
@@ -22,21 +28,22 @@ def create_market_analyst(llm):
             "- 请确保首先调用 get_stock_data 获取基础价格，并**在同一条消息中**调用 get_indicators 获取所有需要的技术指标。\n"
             "- 请撰写一份非常详尽和细致入微的分析报告。报告结尾附带 Markdown 表格。\n"
             "- **所有分析和最终报告都必须使用中文撰写。**"
+            + get_language_instruction()
         )
-        
+
         # 使用隔离的 React Agent 来处理内部工具调用循环
         # 避免在并发模式下污染父图的 Global Messages 导致模型发生幻觉或崩溃
         agent = create_react_agent(llm, tools)
-        
-        prompt_content = f"请开始进行深入的市场与技术面分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
-        
-        # 内部同步阻塞调用该 Agent 完成所有推导工作，向下兼容 LangGraph 低版本
+
+        prompt_content = (
+            f"请开始进行深入的市场与技术面分析。当前日期是 {current_date}，"
+            f"我们当前要分析的公司是 {ticker}。{instrument_context}"
+            "注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
+        )
+
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
-        
-        # 提取最终研报大纲
+
         final_report = result["messages"][-1].content
-        
-        # 提取中间所有的工具调用日志（剥离System和Human）
         internal_messages = result["messages"][2:]
 
         return {

@@ -1,5 +1,4 @@
-import time
-import json
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 
 def create_aggressive_debator(llm):
@@ -33,8 +32,7 @@ def create_aggressive_debator(llm):
 
 通过解决提出的任何具体担忧，反驳他们逻辑中的弱点，并断言冒险能带来超越市场常规的好处来积极参与。保持专注于辩论和说服，而不仅仅是呈现数据。挑战每一个反驳点，以强调为什么高风险方法是最佳选择。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**"""
-        # ----- END OF MODIFICATION -----
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 

@@ -1,10 +1,6 @@
-from typing import Annotated, Sequence
-from datetime import date, timedelta, datetime
-from typing_extensions import TypedDict, Optional
-from langchain_openai import ChatOpenAI
-from tradingagents.agents import *
-from langgraph.prebuilt import ToolNode
-from langgraph.graph import END, StateGraph, START, MessagesState
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import MessagesState
 
 
 # 研究团队状态
@@ -58,7 +54,7 @@ class AgentState(MessagesState):
 
     # 研究步骤
     market_report: Annotated[str, "来自市场分析师的报告"]
-    sentiment_report: Annotated[str, "来自社交媒体分析师的报告"]
+    sentiment_report: Annotated[str, "来自情绪分析师的报告"]
     news_report: Annotated[
         str, "来自新闻研究员关于当前世界动态的报告"
     ]
@@ -77,3 +73,4 @@ class AgentState(MessagesState):
         RiskDebateState, "评估风险的当前辩论状态"
     ]
     final_trade_decision: Annotated[str, "由风险分析师做出的最终交易决策"]
+    past_context: Annotated[str, "运行开始时注入的记忆日志上下文（同标的历史决策 + 跨标的经验教训）"]
