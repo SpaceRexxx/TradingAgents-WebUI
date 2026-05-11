@@ -1,9 +1,35 @@
+import time
+import logging
+
 import pandas as pd
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 from stockstats import wrap
 from typing import Annotated
 import os
 from .config import get_config
+from .utils import safe_ticker_component
+
+logger = logging.getLogger(__name__)
+
+
+def yf_retry(func, max_retries=3, base_delay=2.0):
+    """Execute a yfinance call with exponential backoff on rate limits.
+
+    yfinance raises YFRateLimitError on HTTP 429 responses but does not
+    retry them internally. This wrapper adds retry logic specifically
+    for rate limits. Other exceptions propagate immediately.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except YFRateLimitError:
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"Yahoo Finance rate limited, retrying in {delay:.0f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                raise
 
 
 def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
@@ -23,6 +49,68 @@ def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
+def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
+    """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
+
+    Downloads 15 years of data up to today and caches per symbol. On
+    subsequent calls the cache is reused. Rows after curr_date are
+    filtered out so backtests never see future prices.
+    """
+    # Reject ticker values that would escape the cache directory when
+    # interpolated into the cache filename (e.g. ``../../tmp/x``).
+    safe_symbol = safe_ticker_component(symbol)
+
+    config = get_config()
+    curr_date_dt = pd.to_datetime(curr_date)
+
+    # Cache uses a fixed window (15y to today) so one file per symbol
+    today_date = pd.Timestamp.today()
+    start_date = today_date - pd.DateOffset(years=5)
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = today_date.strftime("%Y-%m-%d")
+
+    os.makedirs(config["data_cache_dir"], exist_ok=True)
+    data_file = os.path.join(
+        config["data_cache_dir"],
+        f"{safe_symbol}-YFin-data-{start_str}-{end_str}.csv",
+    )
+
+    if os.path.exists(data_file):
+        data = pd.read_csv(data_file, on_bad_lines="skip", encoding="utf-8")
+    else:
+        data = yf_retry(lambda: yf.download(
+            symbol,
+            start=start_str,
+            end=end_str,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=True,
+        ))
+        data = data.reset_index()
+        data.to_csv(data_file, index=False, encoding="utf-8")
+
+    data = _clean_dataframe(data)
+
+    # Filter to curr_date to prevent look-ahead bias in backtesting
+    data = data[data["Date"] <= curr_date_dt]
+
+    return data
+
+
+def filter_financials_by_date(data: pd.DataFrame, curr_date: str) -> pd.DataFrame:
+    """Drop financial statement columns (fiscal period timestamps) after curr_date.
+
+    yfinance financial statements use fiscal period end dates as columns.
+    Columns after curr_date represent future data and are removed to
+    prevent look-ahead bias.
+    """
+    if not curr_date or data.empty:
+        return data
+    cutoff = pd.Timestamp(curr_date)
+    mask = pd.to_datetime(data.columns, errors="coerce") <= cutoff
+    return data.loc[:, mask]
+
+
 class StockstatsUtils:
     @staticmethod
     def get_stock_stats(
@@ -34,66 +122,31 @@ class StockstatsUtils:
             str, "curr date for retrieving stock price data, YYYY-mm-dd"
         ],
     ):
-        config = get_config()
+        import numpy as np
 
-        today_date = pd.Timestamp.today()
+        # Use load_ohlcv for caching + look-ahead bias prevention
+        data = load_ohlcv(symbol, curr_date)
         curr_date_dt = pd.to_datetime(curr_date)
 
-        end_date = today_date
-        start_date = today_date - pd.DateOffset(years=15)
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
+        # stockstats 0.6.0+ requires date as DatetimeIndex, not a plain column
+        if "date" in data.columns:
+            data["date"] = pd.to_datetime(data["date"])
+            data = data.set_index("date")
 
-        # Ensure cache directory exists
-        os.makedirs(config["data_cache_dir"], exist_ok=True)
-
-        data_file = os.path.join(
-            config["data_cache_dir"],
-            f"{symbol}-YFin-data-{start_date_str}-{end_date_str}.csv",
-        )
-
-        if os.path.exists(data_file):
-            data = pd.read_csv(data_file, on_bad_lines="skip")
-        else:
-            data = yf.download(
-                symbol,
-                start=start_date_str,
-                end=end_date_str,
-                multi_level_index=False,
-                progress=False,
-                auto_adjust=True,
-            )
-            data = data.reset_index()
-            data.to_csv(data_file, index=False)
-
-        data = _clean_dataframe(data)
-        
-        # 【关键修复】stockstats 0.6.0+ 解析器对 'date' 列极度敏感
-        #  必须将日期设为索引 (Index) 而非普通列，以避免指标解析时的名称冲突
-        #  同时也统一了日期格式
-        data['date'] = pd.to_datetime(data['date'])
-        data.set_index('date', inplace=True)
-        
-        # 包装为 StockDataFrame
         df = wrap(data)
-        
-        # 触发指标计算
+
+        # OBV bypass: stockstats 0.6.0 raises 'Invalid number of return arguments'
+        # for obv; compute manually to avoid the error.
         try:
-            if indicator == 'obv':
-                import numpy as np
-                df['obv'] = (np.sign(df['close'].diff()).fillna(0) * df['volume']).cumsum()
+            if indicator == "obv":
+                df["obv"] = (np.sign(df["close"].diff()).fillna(0) * df["volume"]).cumsum()
             else:
                 df[indicator]
         except Exception as e:
-            # 记录详细错误但返回 N/A，防止分析流程中断
-            print(f"Stockstats error for {symbol} {indicator}: {e}")
+            logger.warning("Stockstats error for %s %s: %s", symbol, indicator, e)
             return f"N/A: Error calculating {indicator}"
 
-        # 通过索引进行日期匹配
         curr_date_str = curr_date_dt.strftime("%Y-%m-%d")
-        
-        # 在索引中寻找匹配日期
-        # index 是 DatetimeIndex，直接按日期字符串筛选
         try:
             matching_rows = df[df.index.strftime("%Y-%m-%d") == curr_date_str]
             if not matching_rows.empty:

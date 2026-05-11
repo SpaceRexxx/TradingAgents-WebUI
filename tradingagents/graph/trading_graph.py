@@ -1,31 +1,33 @@
 # TradingAgents/graph/trading_graph.py
 
+import logging
 import os
 from pathlib import Path
 import json
-from datetime import date
+from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, List, Optional
+
+import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 # 自动加载项目根目录的 .env 文件，确保 API Key 在各种启动方式下都可用
 try:
     from dotenv import load_dotenv
     _env_path = Path(__file__).parent.parent.parent / ".env"
     if _env_path.exists():
-        # 强制 override，确保在 WebApp 场景下能读取到运行时可能变更的 .env 文件
         load_dotenv(_env_path, override=True)
 except ImportError:
     pass
 
 from langgraph.prebuilt import ToolNode
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from tradingagents.llm_clients import create_llm_client
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.agents.utils.memory import FinancialSituationMemory
+from tradingagents.agents.utils.memory import TradingMemoryLog
+from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.agents.utils.agent_states import (
     AgentState,
     InvestDebateState,
@@ -46,6 +48,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_global_news
 )
 
+from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
 from .setup import GraphSetup
 from .propagation import Propagator
@@ -75,215 +78,57 @@ class TradingAgentsGraph:
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
 
-        # ----- START: 诊断打印语句 -----
-        print(f"--- [DEBUG] In trading_graph.py: Config provider is '{self.config.get('llm_provider')}', URL is '{self.config.get('backend_url')}' ---")
-        # ----- END OF DIAGNOSTIC PRINT -----
-
-        # 1. 全局 URL 清洗：确保所有组件（如 Memory）都使用正确的地址
-        provider = self.config.get("llm_provider", "").lower()
-        if provider == "deepseek":
-            b_url = self.config.get("backend_url", "")
-            # 统一移除 /v1 后缀，DeepSeek 官方库会自动处理路径拼接
-            if b_url.endswith("/v1") or b_url.endswith("/v1/"):
-                cleaned_url = b_url.replace("/v1", "").rstrip("/")
-                self.config["backend_url"] = cleaned_url
-                if self.debug:
-                    print(f"--- [DEBUG] Sanitized DeepSeek URL to: {cleaned_url} ---")
-
         # Update the interface's config
         set_config(self.config)
 
         # Create necessary directories
-        os.makedirs(
-            os.path.join(self.config["project_dir"], "dataflows/data_cache"),
-            exist_ok=True,
-        )
+        os.makedirs(self.config["data_cache_dir"], exist_ok=True)
+        os.makedirs(self.config["results_dir"], exist_ok=True)
 
-        # 2. 初始化网络客户端：禁用 HTTP/2 且不信任环境代理
+        # macOS proxy fix: disable trust_env to prevent system proxy from
+        # interfering with long-lived connections (e.g. DeepSeek, NVIDIA).
         import httpx
-        # 特别针对 macOS：显式禁用 trust_env，防止 httpx 读取可能导致冲突的系统代理设置
-        custom_client = httpx.Client(
-            http2=False,                          # 禁用 http2
-            trust_env=False,                      # 关键：不读取系统代理，避免隐形干扰
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        custom_http_client = httpx.Client(
+            http2=False,
+            trust_env=False,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
         )
 
-        # 3. 初始化记忆组件 (FinancialSituationMemory 调用时会读取 self.config)
-        self.bull_memory = FinancialSituationMemory(name="bull_memory", config=self.config)
-        self.bear_memory = FinancialSituationMemory(name="bear_memory", config=self.config)
-        self.trader_memory = FinancialSituationMemory(name="trader_memory", config=self.config)
-        self.invest_judge_memory = FinancialSituationMemory(name="invest_judge_memory", config=self.config)
-        self.risk_manager_memory = FinancialSituationMemory(name="risk_manager_memory", config=self.config)
-        
-        # 4. 初始化 LLM 实例
-        provider = self.config["llm_provider"].lower()
-        
-        if provider in ["openai", "ollama", "openrouter"]:
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                base_url=self.config["backend_url"],
-                max_retries=3,
-                timeout=300,
-                http_client=custom_client,
-            )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                base_url=self.config["backend_url"],
-                max_retries=3,
-                timeout=300,
-                http_client=custom_client,
-            )
-        elif provider == "anthropic":
-            # Anthropic 使用不同的客户端实现，暂时保持默认
-            self.deep_thinking_llm = ChatAnthropic(
-                model=self.config["deep_think_llm"],
-                base_url=self.config["backend_url"],
-                max_retries=3,
-                timeout=300,
-            )
-            self.quick_thinking_llm = ChatAnthropic(
-                model=self.config["quick_think_llm"],
-                base_url=self.config["backend_url"],
-                max_retries=3,
-                timeout=300,
-            )
-        elif provider == "google":
-            self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
-            self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
-        # --- [DEBUG] In trading_graph.py: Config provider is '{self.config.get("llm_provider")}', URL is '{self.config.get("backend_url")}' ---
-        
-        # 鲁棒性改进：提取核心 provider 标识（例如将 "火山引擎 (Volcengine)" 识别为 "volcengine"）
-        provider_full = str(self.config.get("llm_provider", "")).lower()
-        fixed_provider = "openai" # 默认值
-        if "volcengine" in provider_full:
-            fixed_provider = "volcengine"
-        elif "nvidia" in provider_full:
-            fixed_provider = "nvidia"
-        elif "deepseek" in provider_full:
-            fixed_provider = "deepseek"
-        elif "google" in provider_full:
-            fixed_provider = "google"
-        elif "openai" in provider_full:
-            fixed_provider = "openai"
-        elif "anthropic" in provider_full:
-            fixed_provider = "anthropic"
+        # If the WebUI injected an api_key into config, inject it into the
+        # environment so the factory's env-var lookup succeeds. This bridges
+        # the gap between runtime-entered keys (config) and .env-saved keys.
+        api_key = self.config.get("api_key")
+        if api_key:
+            from tradingagents.llm_clients.api_key_env import get_api_key_env
+            env_var = get_api_key_env(self.config.get("llm_provider", ""))
+            if env_var and not os.environ.get(env_var):
+                os.environ[env_var] = str(api_key).strip()
+        llm_kwargs = self._get_provider_kwargs()
+        if api_key:
+            llm_kwargs["api_key"] = str(api_key).strip()
+        if self.callbacks:
+            llm_kwargs["callbacks"] = self.callbacks
+        llm_kwargs["http_client"] = custom_http_client
+        llm_kwargs["timeout"] = 900
+        llm_kwargs["max_retries"] = 5
 
-        if fixed_provider == "openai":
-            api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY")
-            if api_key: api_key = str(api_key).strip()
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY / api_key not provided.")
-            
-            # 使用配置中的 URL
-            b_url = self.config.get("backend_url", "https://api.openai.com/v1")
+        deep_client = create_llm_client(
+            provider=self.config["llm_provider"],
+            model=self.config["deep_think_llm"],
+            base_url=self.config.get("backend_url"),
+            **llm_kwargs,
+        )
+        quick_client = create_llm_client(
+            provider=self.config["llm_provider"],
+            model=self.config["quick_think_llm"],
+            base_url=self.config.get("backend_url"),
+            **llm_kwargs,
+        )
 
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-        elif fixed_provider == "deepseek":
-            api_key = self.config.get("api_key") or os.environ.get("DEEPSEEK_API_KEY")
-            if api_key: api_key = str(api_key).strip()
-            if not api_key:
-                raise ValueError("DEEPSEEK_API_KEY / api_key not provided.")
-            
-            # 使用已清洗的 URL
-            b_url = self.config["backend_url"]
+        self.deep_thinking_llm = deep_client.get_llm()
+        self.quick_thinking_llm = quick_client.get_llm()
 
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-        elif fixed_provider == "nvidia":
-            api_key = self.config.get("api_key") or os.environ.get("NVIDIA_API_KEY")
-            if api_key: api_key = str(api_key).strip()
-            if not api_key:
-                api_key = self.config.get("nvidia_api_key")
-            if not api_key:
-                raise ValueError("NVIDIA API Key not provided.")
-            
-            b_url = "https://integrate.api.nvidia.com/v1"
-            
-            model_kwargs = {}
-            if "deepseek" in self.config["deep_think_llm"].lower():
-                model_kwargs["chat_template_kwargs"] = {"thinking": True}
-
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-                model_kwargs=model_kwargs
-            )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-        elif fixed_provider == "volcengine":
-            api_key = self.config.get("api_key") or os.environ.get("ARK_API_KEY")
-            if api_key: api_key = str(api_key).strip()
-            if not api_key:
-                api_key = self.config.get("ark_api_key")
-            if not api_key:
-                raise ValueError("ARK API Key not provided.")
-            
-            b_url = "https://ark.cn-beijing.volces.com/api/v3"
-
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                api_key=api_key,
-                base_url=b_url,
-                max_retries=5,
-                timeout=900,
-                http_client=custom_client,
-            )
-        else:
-            raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
-        
-        # Initialize memories
-        self.bull_memory = FinancialSituationMemory("bull_memory", self.config)
-        self.bear_memory = FinancialSituationMemory("bear_memory", self.config)
-        self.trader_memory = FinancialSituationMemory("trader_memory", self.config)
-        self.invest_judge_memory = FinancialSituationMemory("invest_judge_memory", self.config)
-        self.risk_manager_memory = FinancialSituationMemory("risk_manager_memory", self.config)
+        self.memory_log = TradingMemoryLog(self.config)
 
         # Create tool nodes
         self.tool_nodes = self._create_tool_nodes()
@@ -297,15 +142,12 @@ class TradingAgentsGraph:
             self.quick_thinking_llm,
             self.deep_thinking_llm,
             self.tool_nodes,
-            self.bull_memory,
-            self.bear_memory,
-            self.trader_memory,
-            self.invest_judge_memory,
-            self.risk_manager_memory,
             self.conditional_logic,
         )
 
-        self.propagator = Propagator()
+        self.propagator = Propagator(
+            max_recur_limit=self.config.get("max_recur_limit", 100),
+        )
         self.reflector = Reflector(self.quick_thinking_llm)
         self.signal_processor = SignalProcessor(self.quick_thinking_llm)
 
@@ -314,8 +156,10 @@ class TradingAgentsGraph:
         self.ticker = None
         self.log_states_dict = {}  # date to full state dict
 
-        # Set up the graph
-        self.graph = self.graph_setup.setup_graph(selected_analysts)
+        # Set up the graph: keep the workflow for recompilation with a checkpointer.
+        self.workflow = self.graph_setup.setup_graph(selected_analysts)
+        self.graph = self.workflow.compile()
+        self._checkpointer_ctx = None
 
     def _get_provider_kwargs(self) -> Dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""
@@ -331,6 +175,11 @@ class TradingAgentsGraph:
             reasoning_effort = self.config.get("openai_reasoning_effort")
             if reasoning_effort:
                 kwargs["reasoning_effort"] = reasoning_effort
+
+        elif provider == "anthropic":
+            effort = self.config.get("anthropic_effort")
+            if effort:
+                kwargs["effort"] = effort
 
         return kwargs
 
@@ -370,19 +219,133 @@ class TradingAgentsGraph:
             ),
         }
 
-    def propagate(self, company_name, trade_date):
-        """Run the trading agents graph for a company on a specific date."""
+    def _fetch_returns(
+        self, ticker: str, trade_date: str, holding_days: int = 5
+    ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
+        """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
+        Returns (raw_return, alpha_return, actual_holding_days) or
+        (None, None, None) if price data is unavailable (too recent, delisted,
+        or network error).
+        """
+        try:
+            start = datetime.strptime(trade_date, "%Y-%m-%d")
+            end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
+            end_str = end.strftime("%Y-%m-%d")
+
+            stock = yf.Ticker(ticker).history(start=trade_date, end=end_str)
+            spy = yf.Ticker("SPY").history(start=trade_date, end=end_str)
+
+            if len(stock) < 2 or len(spy) < 2:
+                return None, None, None
+
+            actual_days = min(holding_days, len(stock) - 1, len(spy) - 1)
+            raw = float(
+                (stock["Close"].iloc[actual_days] - stock["Close"].iloc[0])
+                / stock["Close"].iloc[0]
+            )
+            spy_ret = float(
+                (spy["Close"].iloc[actual_days] - spy["Close"].iloc[0])
+                / spy["Close"].iloc[0]
+            )
+            alpha = raw - spy_ret
+            return raw, alpha, actual_days
+        except Exception as e:
+            logger.warning(
+                "Could not resolve outcome for %s on %s (will retry next run): %s",
+                ticker, trade_date, e,
+            )
+            return None, None, None
+
+    def _resolve_pending_entries(self, ticker: str) -> None:
+        """Resolve pending log entries for ticker at the start of a new run.
+
+        Fetches returns for each same-ticker pending entry, generates reflections,
+        then writes all updates in a single atomic batch write to avoid redundant I/O.
+        Skips entries whose price data is not yet available (too recent or delisted).
+
+        Trade-off: only same-ticker entries are resolved per run.  Entries for
+        other tickers accumulate until that ticker is run again.
+        """
+        pending = [e for e in self.memory_log.get_pending_entries() if e["ticker"] == ticker]
+        if not pending:
+            return
+
+        updates = []
+        for entry in pending:
+            raw, alpha, days = self._fetch_returns(ticker, entry["date"])
+            if raw is None:
+                continue  # price not available yet — try again next run
+            reflection = self.reflector.reflect_on_final_decision(
+                final_decision=entry.get("decision", ""),
+                raw_return=raw,
+                alpha_return=alpha,
+            )
+            updates.append({
+                "ticker": ticker,
+                "trade_date": entry["date"],
+                "raw_return": raw,
+                "alpha_return": alpha,
+                "holding_days": days,
+                "reflection": reflection,
+            })
+
+        if updates:
+            self.memory_log.batch_update_with_outcomes(updates)
+
+    def propagate(self, company_name, trade_date):
+        """Run the trading agents graph for a company on a specific date.
+
+        When ``checkpoint_enabled`` is set in config, the graph is recompiled
+        with a per-ticker SqliteSaver so a crashed run can resume from the last
+        successful node on a subsequent invocation with the same ticker+date.
+        """
         self.ticker = company_name
 
-        # Initialize state
+        # Resolve any pending memory-log entries for this ticker before the pipeline runs.
+        self._resolve_pending_entries(company_name)
+
+        # Recompile with a checkpointer if the user opted in.
+        if self.config.get("checkpoint_enabled"):
+            self._checkpointer_ctx = get_checkpointer(
+                self.config["data_cache_dir"], company_name
+            )
+            saver = self._checkpointer_ctx.__enter__()
+            self.graph = self.workflow.compile(checkpointer=saver)
+
+            step = checkpoint_step(
+                self.config["data_cache_dir"], company_name, str(trade_date)
+            )
+            if step is not None:
+                logger.info(
+                    "Resuming from step %d for %s on %s", step, company_name, trade_date
+                )
+            else:
+                logger.info("Starting fresh for %s on %s", company_name, trade_date)
+
+        try:
+            return self._run_graph(company_name, trade_date)
+        finally:
+            if self._checkpointer_ctx is not None:
+                self._checkpointer_ctx.__exit__(None, None, None)
+                self._checkpointer_ctx = None
+                self.graph = self.workflow.compile()
+
+    def _run_graph(self, company_name, trade_date):
+        """Execute the graph and write the resulting state to disk and memory log."""
+        # Initialize state — inject memory log context for PM.
+        past_context = self.memory_log.get_past_context(company_name)
         init_agent_state = self.propagator.create_initial_state(
-            company_name, trade_date
+            company_name, trade_date, past_context=past_context
         )
         args = self.propagator.get_graph_args()
 
+        # Inject thread_id so same ticker+date resumes, different date starts fresh.
+        if self.config.get("checkpoint_enabled"):
+            tid = thread_id(company_name, str(trade_date))
+            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
+
         if self.debug:
-            # Debug mode with tracing
             trace = []
             for chunk in self.graph.stream(init_agent_state, **args):
                 if len(chunk["messages"]) == 0:
@@ -390,19 +353,33 @@ class TradingAgentsGraph:
                 else:
                     chunk["messages"][-1].pretty_print()
                     trace.append(chunk)
-
-            final_state = trace[-1]
+            # Streamed chunks are per-node deltas. Merge them so the returned
+            # state matches what graph.invoke() yields in the non-debug path.
+            final_state = {}
+            for chunk in trace:
+                final_state.update(chunk)
         else:
-            # Standard mode without tracing
             final_state = self.graph.invoke(init_agent_state, **args)
 
-        # Store current state for reflection
+        # Store current state for reflection.
         self.curr_state = final_state
 
-        # Log state
+        # Log state to disk.
         self._log_state(trade_date, final_state)
 
-        # Return decision and processed signal
+        # Store decision for deferred reflection on the next same-ticker run.
+        self.memory_log.store_decision(
+            ticker=company_name,
+            trade_date=trade_date,
+            final_trade_decision=final_state["final_trade_decision"],
+        )
+
+        # Clear checkpoint on successful completion to avoid stale state.
+        if self.config.get("checkpoint_enabled"):
+            clear_checkpoint(
+                self.config["data_cache_dir"], company_name, str(trade_date)
+            )
+
         return final_state, self.process_signal(final_state["final_trade_decision"])
 
     def _log_state(self, trade_date, final_state):
@@ -437,34 +414,15 @@ class TradingAgentsGraph:
             "final_trade_decision": final_state["final_trade_decision"],
         }
 
-        # Save to file
-        directory = Path(f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/")
+        # Save to file. Reject ticker values that would escape the
+        # results directory when joined as a path component.
+        safe_ticker = safe_ticker_component(self.ticker)
+        directory = Path(self.config["results_dir"]) / safe_ticker / "TradingAgentsStrategy_logs"
         directory.mkdir(parents=True, exist_ok=True)
 
-        with open(
-            f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/full_states_log_{trade_date}.json",
-            "w",
-            encoding="utf-8",
-        ) as f:
-            json.dump(self.log_states_dict, f, indent=4)
-
-    def reflect_and_remember(self, returns_losses):
-        """Reflect on decisions and update memory based on returns."""
-        self.reflector.reflect_bull_researcher(
-            self.curr_state, returns_losses, self.bull_memory
-        )
-        self.reflector.reflect_bear_researcher(
-            self.curr_state, returns_losses, self.bear_memory
-        )
-        self.reflector.reflect_trader(
-            self.curr_state, returns_losses, self.trader_memory
-        )
-        self.reflector.reflect_invest_judge(
-            self.curr_state, returns_losses, self.invest_judge_memory
-        )
-        self.reflector.reflect_risk_manager(
-            self.curr_state, returns_losses, self.risk_manager_memory
-        )
+        log_path = directory / f"full_states_log_{trade_date}.json"
+        with open(log_path, "w", encoding="utf-8") as f:
+            json.dump(self.log_states_dict[str(trade_date)], f, indent=4)
 
     def process_signal(self, full_signal):
         """Process a signal to extract the core decision."""

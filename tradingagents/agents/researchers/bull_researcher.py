@@ -1,9 +1,7 @@
-from langchain_core.messages import AIMessage
-import time
-import json
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 
-def create_bull_researcher(llm, memory):
+def create_bull_researcher(llm):
     def bull_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]
         history = investment_debate_state.get("history", "")
@@ -15,18 +13,6 @@ def create_bull_researcher(llm, memory):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
-
-        past_memory_str = ""
-        if past_memories:
-            for i, rec in enumerate(past_memories, 1):
-                past_memory_str += rec.get("recommendation", "") + "\n\n"
-        
-        if not past_memory_str:
-            past_memory_str = "未找到相关历史交易记忆。"
-
-        # ----- START: 中文翻译和指令修改 -----
         prompt = f"""你是一名多头分析师，倡导投资该股票。你的任务是建立一个强有力的、基于证据的案例，强调增长潜力、竞争优势和积极的市场指标。请利用所提供的研究和数据，有效回应担忧并反驳看跌的论点。
 
 重点关注的关键点：
@@ -43,18 +29,14 @@ def create_bull_researcher(llm, memory):
 公司基本面报告: {fundamentals_report}
 辩论的对话历史: {history}
 空头分析师的最新论点: {current_response}
-从类似情况中获得的反思和经验教训: {past_memory_str}
 
-请利用这些信息，提出一个令人信服的看涨论点，反驳空头的担忧，并参与一场动态辩论，以展示多头立场的优势。你还必须回顾反思，并从过去的错误中吸取教训。
+请利用这些信息，提出一个令人信服的看涨论点，反驳空头的担忧，并参与一场动态辩论，以展示多头立场的优势。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**"""
-        # ----- END OF MODIFICATION -----
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 
-        # ----- START: 将输出前缀也改为中文 -----
         argument = f"Bull Analyst: {response.content}"
-        # ----- END OF MODIFICATION -----
 
         new_investment_debate_state = {
             "history": history + "\n" + argument,
@@ -64,6 +46,6 @@ def create_bull_researcher(llm, memory):
             "count": investment_debate_state["count"] + 1,
         }
 
-        return {"investment_debate_state": new_investment_debate_state,"sender": "Bull Researcher"}
+        return {"investment_debate_state": new_investment_debate_state, "sender": "Bull Researcher"}
 
     return bull_node

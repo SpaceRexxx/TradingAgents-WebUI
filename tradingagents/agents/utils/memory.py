@@ -1,111 +1,300 @@
-import os
-import chromadb
-from chromadb.config import Settings
-from chromadb.utils import embedding_functions
-import openai
+"""Append-only markdown decision log for TradingAgents."""
 
-CHROMA_SETTINGS = Settings(allow_reset=True, anonymized_telemetry=False)
+from typing import List, Optional
+from pathlib import Path
+import re
 
-class FinancialSituationMemory:
-    def __init__(self, name: str, config: dict):
-        print(f"--- [DEBUG] In memory.py: Initializing '{name}'. Provider='{config.get('llm_provider')}', URL='{config.get('backend_url')}' ---")
+from tradingagents.agents.utils.rating import parse_rating
 
-        self.config = config
-        embedding_function = None
-        backend_url = self.config.get("backend_url", "")
 
-        # --- 重构后的判断逻辑 ---
-        
-        # Case 1: Google
-        if "googleapis.com" in backend_url:
-            print("--- [DEBUG] Memory: Matched Google logic. ---")
-            # 优先使用 config 注入的 key，否则回退到环境变量
-            google_api_key = self.config.get("api_key") or os.environ.get("GOOGLE_API_KEY")
-            if not google_api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable not set for Google provider.")
-            embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
-                api_key=google_api_key, 
-                model_name="models/embedding-001"
+class TradingMemoryLog:
+    """Append-only markdown log of trading decisions and reflections."""
+
+    # HTML comment: cannot appear in LLM prose output, safe as a hard delimiter
+    _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
+    # Precompiled patterns — avoids re-compilation on every load_entries() call
+    _DECISION_RE = re.compile(r"DECISION:\n(.*?)(?=\nREFLECTION:|\Z)", re.DOTALL)
+    _REFLECTION_RE = re.compile(r"REFLECTION:\n(.*?)$", re.DOTALL)
+
+    def __init__(self, config: dict = None):
+        cfg = config or {}
+        self._log_path = None
+        path = cfg.get("memory_log_path")
+        if path:
+            self._log_path = Path(path).expanduser()
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Optional cap on resolved entries. None disables rotation.
+        self._max_entries = cfg.get("memory_log_max_entries")
+
+    # --- Write path (Phase A) ---
+
+    def store_decision(
+        self,
+        ticker: str,
+        trade_date: str,
+        final_trade_decision: str,
+    ) -> None:
+        """Append pending entry at end of propagate(). No LLM call."""
+        if not self._log_path:
+            return
+        # Idempotency guard: fast raw-text scan instead of full parse
+        if self._log_path.exists():
+            raw = self._log_path.read_text(encoding="utf-8")
+            for line in raw.splitlines():
+                if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("| pending]"):
+                    return
+        rating = parse_rating(final_trade_decision)
+        tag = f"[{trade_date} | {ticker} | {rating} | pending]"
+        entry = f"{tag}\n\nDECISION:\n{final_trade_decision}{self._SEPARATOR}"
+        with open(self._log_path, "a", encoding="utf-8") as f:
+            f.write(entry)
+
+    # --- Read path (Phase A) ---
+
+    def load_entries(self) -> List[dict]:
+        """Parse all entries from log. Returns list of dicts."""
+        if not self._log_path or not self._log_path.exists():
+            return []
+        text = self._log_path.read_text(encoding="utf-8")
+        raw_entries = [e.strip() for e in text.split(self._SEPARATOR) if e.strip()]
+        entries = []
+        for raw in raw_entries:
+            parsed = self._parse_entry(raw)
+            if parsed:
+                entries.append(parsed)
+        return entries
+
+    def get_pending_entries(self) -> List[dict]:
+        """Return entries with outcome:pending (for Phase B)."""
+        return [e for e in self.load_entries() if e.get("pending")]
+
+    def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
+        """Return formatted past context string for agent prompt injection."""
+        entries = [e for e in self.load_entries() if not e.get("pending")]
+        if not entries:
+            return ""
+
+        same, cross = [], []
+        for e in reversed(entries):
+            if len(same) >= n_same and len(cross) >= n_cross:
+                break
+            if e["ticker"] == ticker and len(same) < n_same:
+                same.append(e)
+            elif e["ticker"] != ticker and len(cross) < n_cross:
+                cross.append(e)
+
+        if not same and not cross:
+            return ""
+
+        parts = []
+        if same:
+            parts.append(f"Past analyses of {ticker} (most recent first):")
+            parts.extend(self._format_full(e) for e in same)
+        if cross:
+            parts.append("Recent cross-ticker lessons:")
+            parts.extend(self._format_reflection_only(e) for e in cross)
+        return "\n\n".join(parts)
+
+    # --- Update path (Phase B) ---
+
+    def update_with_outcome(
+        self,
+        ticker: str,
+        trade_date: str,
+        raw_return: float,
+        alpha_return: float,
+        holding_days: int,
+        reflection: str,
+    ) -> None:
+        """Replace pending tag and append REFLECTION section using atomic write.
+
+        Finds the first pending entry matching (trade_date, ticker), updates
+        its tag with return figures, and appends a REFLECTION section.  Uses
+        a temp-file + os.replace() so a crash mid-write never corrupts the log.
+        """
+        if not self._log_path or not self._log_path.exists():
+            return
+
+        text = self._log_path.read_text(encoding="utf-8")
+        blocks = text.split(self._SEPARATOR)
+
+        pending_prefix = f"[{trade_date} | {ticker} |"
+        raw_pct = f"{raw_return:+.1%}"
+        alpha_pct = f"{alpha_return:+.1%}"
+
+        updated = False
+        new_blocks = []
+        for block in blocks:
+            stripped = block.strip()
+            if not stripped:
+                new_blocks.append(block)
+                continue
+
+            lines = stripped.splitlines()
+            tag_line = lines[0].strip()
+
+            if (
+                not updated
+                and tag_line.startswith(pending_prefix)
+                and tag_line.endswith("| pending]")
+            ):
+                # Parse rating from the existing pending tag
+                fields = [f.strip() for f in tag_line[1:-1].split("|")]
+                rating = fields[2]
+                new_tag = (
+                    f"[{trade_date} | {ticker} | {rating}"
+                    f" | {raw_pct} | {alpha_pct} | {holding_days}d]"
+                )
+                rest = "\n".join(lines[1:])
+                new_blocks.append(
+                    f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{reflection}"
+                )
+                updated = True
+            else:
+                new_blocks.append(block)
+
+        if not updated:
+            return
+
+        new_blocks = self._apply_rotation(new_blocks)
+        new_text = self._SEPARATOR.join(new_blocks)
+        tmp_path = self._log_path.with_suffix(".tmp")
+        tmp_path.write_text(new_text, encoding="utf-8")
+        tmp_path.replace(self._log_path)
+
+    def batch_update_with_outcomes(self, updates: List[dict]) -> None:
+        """Apply multiple outcome updates in a single read + atomic write.
+
+        Each element of updates must have keys: ticker, trade_date,
+        raw_return, alpha_return, holding_days, reflection.
+        """
+        if not self._log_path or not self._log_path.exists() or not updates:
+            return
+
+        text = self._log_path.read_text(encoding="utf-8")
+        blocks = text.split(self._SEPARATOR)
+
+        # Build lookup keyed by (trade_date, ticker) for O(1) dispatch
+        update_map = {(u["trade_date"], u["ticker"]): u for u in updates}
+
+        new_blocks = []
+        for block in blocks:
+            stripped = block.strip()
+            if not stripped:
+                new_blocks.append(block)
+                continue
+
+            lines = stripped.splitlines()
+            tag_line = lines[0].strip()
+
+            matched = False
+            for (trade_date, ticker), upd in list(update_map.items()):
+                pending_prefix = f"[{trade_date} | {ticker} |"
+                if tag_line.startswith(pending_prefix) and tag_line.endswith("| pending]"):
+                    fields = [f.strip() for f in tag_line[1:-1].split("|")]
+                    rating = fields[2]
+                    raw_pct = f"{upd['raw_return']:+.1%}"
+                    alpha_pct = f"{upd['alpha_return']:+.1%}"
+                    new_tag = (
+                        f"[{trade_date} | {ticker} | {rating}"
+                        f" | {raw_pct} | {alpha_pct} | {upd['holding_days']}d]"
+                    )
+                    rest = "\n".join(lines[1:])
+                    new_blocks.append(
+                        f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{upd['reflection']}"
+                    )
+                    del update_map[(trade_date, ticker)]
+                    matched = True
+                    break
+
+            if not matched:
+                new_blocks.append(block)
+
+        new_blocks = self._apply_rotation(new_blocks)
+        new_text = self._SEPARATOR.join(new_blocks)
+        tmp_path = self._log_path.with_suffix(".tmp")
+        tmp_path.write_text(new_text, encoding="utf-8")
+        tmp_path.replace(self._log_path)
+
+    # --- Helpers ---
+
+    def _apply_rotation(self, blocks: List[str]) -> List[str]:
+        """Drop oldest resolved blocks when their count exceeds max_entries.
+
+        Pending blocks are always kept (they represent unprocessed work).
+        Returns ``blocks`` unchanged when rotation is disabled or under cap.
+        """
+        if not self._max_entries or self._max_entries <= 0:
+            return blocks
+
+        # Tag each block with (kept, is_resolved) by parsing tag-line markers.
+        decisions = []
+        for block in blocks:
+            stripped = block.strip()
+            if not stripped:
+                decisions.append((block, False))
+                continue
+            tag_line = stripped.splitlines()[0].strip()
+            is_resolved = (
+                tag_line.startswith("[")
+                and tag_line.endswith("]")
+                and not tag_line.endswith("| pending]")
             )
+            decisions.append((block, is_resolved))
 
-        # Case 2: Ollama (local)
-        elif "localhost:11434" in backend_url:
-            print("--- [DEBUG] Memory: Matched Ollama logic. ---")
-            embedding_function = embedding_functions.OllamaEmbeddingFunction(
-                url="http://localhost:11434/api/embeddings",
-                model_name="nomic-embed-text"
-            )
-        
-        # Case 3 (Default): Handles all other OpenAI-compatible APIs (OpenAI, DeepSeek, Groq, etc.)
-        else:
-            print(f"--- [DEBUG] Memory: Matched OpenAI-compatible logic for URL: {backend_url} ---")
-            
-            # 这里的逻辑是：优先使用注入的 api_key
-            api_key_to_use = self.config.get("api_key")
-            model_name_to_use = "text-embedding-3-small" # Default model
+        resolved_count = sum(1 for _, r in decisions if r)
+        if resolved_count <= self._max_entries:
+            return blocks
 
-            if "deepseek.com" in backend_url:
-                print("--- [DEBUG] Memory: Specifically identified DeepSeek. ---")
-                if not api_key_to_use: api_key_to_use = os.environ.get("DEEPSEEK_API_KEY")
-                model_name_to_use = "deepseek-text-embedding-v2"
-                if not api_key_to_use:
-                    raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
-            elif "nvidia.com" in backend_url:
-                print("--- [DEBUG] Memory: Specifically identified NVIDIA. ---")
-                if not api_key_to_use: api_key_to_use = os.environ.get("NVIDIA_API_KEY")
-                model_name_to_use = "nvidia/nv-embedqa-e5-v5" 
-                if not api_key_to_use:
-                    if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
-                    if api_key_to_use:
-                        print("--- [DEBUG] Memory: NVIDIA Key missing, falling back to OpenAI Key for Embeddings. ---")
-                        backend_url = "https://api.openai.com/v1"
-                        model_name_to_use = "text-embedding-3-small"
-                    else:
-                        raise ValueError("NVIDIA_API_KEY (and OPENAI_API_KEY fallback) not set for NVIDIA provider.")
-            elif "volces.com" in backend_url:
-                print("--- [DEBUG] Memory: Specifically identified Volcengine (Ark). ---")
-                if not api_key_to_use: api_key_to_use = os.environ.get("ARK_API_KEY")
-                model_name_to_use = "text-embedding-3-small" 
-                if not api_key_to_use:
-                    if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
-                    if api_key_to_use:
-                        print("--- [DEBUG] Memory: Ark Key missing, falling back to OpenAI Key. ---")
-                        backend_url = "https://api.openai.com/v1"
-                    else:
-                        raise ValueError("ARK_API_KEY (and OPENAI_API_KEY fallback) not set for Volcengine.")
-            else: # Default to OpenAI key for others
-                if not api_key_to_use: api_key_to_use = os.environ.get("OPENAI_API_KEY")
+        to_drop = resolved_count - self._max_entries
+        kept: List[str] = []
+        for block, is_resolved in decisions:
+            if is_resolved and to_drop > 0:
+                to_drop -= 1
+                continue
+            kept.append(block)
+        return kept
 
-            print(f"--- [DEBUG] Memory: Using API Key starting with '{str(api_key_to_use)[:6]}', Model='{model_name_to_use}', URL='{backend_url}' ---")
+    def _parse_entry(self, raw: str) -> Optional[dict]:
+        lines = raw.strip().splitlines()
+        if not lines:
+            return None
+        tag_line = lines[0].strip()
+        if not (tag_line.startswith("[") and tag_line.endswith("]")):
+            return None
+        fields = [f.strip() for f in tag_line[1:-1].split("|")]
+        if len(fields) < 4:
+            return None
+        entry = {
+            "date": fields[0],
+            "ticker": fields[1],
+            "rating": fields[2],
+            "pending": fields[3] == "pending",
+            "raw": fields[3] if fields[3] != "pending" else None,
+            "alpha": fields[4] if len(fields) > 4 else None,
+            "holding": fields[5] if len(fields) > 5 else None,
+        }
+        body = "\n".join(lines[1:]).strip()
+        decision_match = self._DECISION_RE.search(body)
+        reflection_match = self._REFLECTION_RE.search(body)
+        entry["decision"] = decision_match.group(1).strip() if decision_match else ""
+        entry["reflection"] = reflection_match.group(1).strip() if reflection_match else ""
+        return entry
 
-            # 关键：避免直接修改 openai.base_url 全局变量，直接传参给函数。
-            # 如果 backend_url 包含 /v1 路径，OpenAIEmbeddingFunction 内部通常能处理好，
-            # 但为了极致稳定性，我们手动管理 api_base 参数。
-            
-            embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-                api_key=api_key_to_use, 
-                api_base=backend_url, # 直接局部注入 API 地址
-                model_name=model_name_to_use
-            )
-        
-        # --- 逻辑结束 ---
+    def _format_full(self, e: dict) -> str:
+        raw = e["raw"] or "n/a"
+        alpha = e["alpha"] or "n/a"
+        holding = e["holding"] or "n/a"
+        tag = f"[{e['date']} | {e['ticker']} | {e['rating']} | {raw} | {alpha} | {holding}]"
+        parts = [tag, f"DECISION:\n{e['decision']}"]
+        if e["reflection"]:
+            parts.append(f"REFLECTION:\n{e['reflection']}")
+        return "\n\n".join(parts)
 
-        if embedding_function is None:
-            raise ValueError("Could not create an embedding function for the given configuration.")
-
-        self.chroma_client = chromadb.Client(CHROMA_SETTINGS)
-        self.situation_collection = self.chroma_client.get_or_create_collection(
-            name=name,
-            embedding_function=embedding_function
-        )
-
-    def add_situations(self, situations_and_advice: list[tuple[str, str]]):
-        # ... (此函数无需修改)
-        pass
-
-    def get_memories(self, current_situation: str, n_matches: int = 1) -> list[dict]:
-        # ... (此函数无需修改)
-        pass
-
-if __name__ == "__main__":
-    pass
+    def _format_reflection_only(self, e: dict) -> str:
+        tag = f"[{e['date']} | {e['ticker']} | {e['rating']} | {e['raw'] or 'n/a'}]"
+        if e["reflection"]:
+            return f"{tag}\n{e['reflection']}"
+        text = e["decision"][:300]
+        suffix = "..." if len(e["decision"]) > 300 else ""
+        return f"{tag}\n{text}{suffix}"

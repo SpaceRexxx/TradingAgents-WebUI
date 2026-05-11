@@ -51,12 +51,12 @@ def get_indicators(
     """
     # LLMs sometimes pass multiple indicators as a comma-separated string;
     # split and process each individually.
-    indicators = [i.strip() for i in indicator.split(",") if i.strip()]
-    if len(indicators) > 1:
-        results = []
-        for ind in indicators:
+    indicators = [i.strip().lower() for i in indicator.split(",") if i.strip()]
+    results = []
+    for ind in indicators:
+        try:
             raw = route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days)
             results.append(_truncate_indicator_result(raw))
-        return "\n\n".join(results)
-    raw = route_to_vendor("get_indicators", symbol, indicator.strip(), curr_date, look_back_days)
-    return _truncate_indicator_result(raw)
+        except ValueError as e:
+            results.append(str(e))
+    return "\n\n".join(results)

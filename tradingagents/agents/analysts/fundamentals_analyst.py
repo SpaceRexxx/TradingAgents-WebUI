@@ -1,17 +1,27 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
-from tradingagents.agents.utils.agent_utils import get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_fundamentals,
+    get_balance_sheet,
+    get_cashflow,
+    get_income_statement,
+    get_insider_transactions,
+    get_language_instruction,
+)
 
 def create_fundamentals_analyst(llm):
     def fundamentals_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
+        instrument_context = build_instrument_context(ticker)
 
         tools = [
             get_fundamentals,
             get_balance_sheet,
             get_cashflow,
             get_income_statement,
+            get_insider_transactions,
         ]
 
         system_message = (
@@ -21,11 +31,16 @@ def create_fundamentals_analyst(llm):
             "请确保包含尽可能多的细节。不要仅仅陈述趋势好坏参半，而要提供可能有助于交易者做出决策的详细、精细的分析和见解。\n"
             "确保在报告末尾附加一个Markdown表格，以有组织地整理关键点。\n"
             "**重要指令：你的所有分析和最终报告都必须使用中文撰写。**"
+            + get_language_instruction()
         )
 
         agent = create_react_agent(llm, tools)
 
-        prompt_content = f"请开始进行深入的基本面分析。当前日期是 {current_date}，我们当前要分析的公司是 {ticker}。注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
+        prompt_content = (
+            f"请开始进行深入的基本面分析。当前日期是 {current_date}，"
+            f"我们当前要分析的公司是 {ticker}。{instrument_context}"
+            "注意：不需要向我交代工具调用的话语，直接输出排版精美的最终报告和表格即可。"
+        )
 
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
 
