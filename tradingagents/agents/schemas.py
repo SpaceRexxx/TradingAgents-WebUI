@@ -198,11 +198,34 @@ class PortfolioDecision(BaseModel):
     )
     price_target: Optional[float] = Field(
         default=None,
-        description="Optional target price in the instrument's quote currency.",
+        description="Optional primary target price / first resistance level in the instrument's quote currency.",
+    )
+    stop_loss: Optional[float] = Field(
+        default=None,
+        description="Optional stop-loss price level in the instrument's quote currency.",
+    )
+    breakout_point: Optional[float] = Field(
+        default=None,
+        description=(
+            "Optional breakout / add-on trigger price. If price breaks this level "
+            "with volume, the position can be increased or new entry initiated."
+        ),
     )
     time_horizon: Optional[str] = Field(
         default=None,
         description="Optional recommended holding period, e.g. '3-6 months'.",
+    )
+    outlook_30d: Optional[str] = Field(
+        default=None,
+        description="Optional 30-day outlook: short-term price range and tactical adjustment guidance.",
+    )
+    outlook_60d: Optional[str] = Field(
+        default=None,
+        description="Optional 60-day outlook: medium-term trend and key catalysts that may affect price.",
+    )
+    outlook_90d: Optional[str] = Field(
+        default=None,
+        description="Optional 90-day outlook: long-term trend and conditions for adding / clearing position.",
     )
 
 
@@ -222,7 +245,17 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
     if decision.price_target is not None:
-        parts.extend(["", f"**Price Target**: {decision.price_target}"])
+        parts.extend(["", f"**Price Target / Resistance**: {decision.price_target}"])
+    if decision.stop_loss is not None:
+        parts.extend(["", f"**Stop Loss**: {decision.stop_loss}"])
+    if decision.breakout_point is not None:
+        parts.extend(["", f"**Breakout Point**: {decision.breakout_point}"])
     if decision.time_horizon:
         parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
+    if decision.outlook_30d:
+        parts.extend(["", f"**30-Day Outlook**: {decision.outlook_30d}"])
+    if decision.outlook_60d:
+        parts.extend(["", f"**60-Day Outlook**: {decision.outlook_60d}"])
+    if decision.outlook_90d:
+        parts.extend(["", f"**90-Day Outlook**: {decision.outlook_90d}"])
     return "\n".join(parts)
