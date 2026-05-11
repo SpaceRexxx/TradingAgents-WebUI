@@ -31,8 +31,8 @@ from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 
 
-def _seven_days_back(trade_date: str) -> str:
-    return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+def _days_back(trade_date: str, days: int = 7) -> str:
+    return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 def create_sentiment_analyst(llm):
@@ -46,7 +46,8 @@ def create_sentiment_analyst(llm):
     def sentiment_analyst_node(state):
         ticker = state["company_of_interest"]
         end_date = state["trade_date"]
-        start_date = _seven_days_back(end_date)
+        lookback = state.get("news_lookback_days", 7)
+        start_date = _days_back(end_date, lookback)
         instrument_context = build_instrument_context(ticker)
 
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
@@ -110,7 +111,7 @@ def _build_system_message(
 
 ## Data sources (pre-fetched, in this prompt)
 
-### News headlines — Yahoo Finance, past 7 days
+### News headlines — Yahoo Finance, past {(datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days} days
 Institutional framing. Fact-driven, slower-moving signal.
 
 <start_of_news>
@@ -124,7 +125,7 @@ Fast-moving signal. Each message carries a user-labeled sentiment tag (Bullish /
 {stocktwits_block}
 <end_of_stocktwits>
 
-### Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)
+### Reddit posts — r/wallstreetbets, r/stocks, r/investing (recent)
 Community discussion. Engagement signal via upvote score and comment count. Subreddit character matters (r/wallstreetbets is often contrarian/exuberant; r/stocks more measured; r/investing longer-term).
 
 <start_of_reddit>

@@ -339,6 +339,14 @@ with sync_playwright() as p:
 
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
+    # 定义更新首选项的辅助函数 (移动到顶部以防引用错误)
+    PREFS_FILE = ".ui_prefs.json"
+    def save_prefs(prefs):
+        with open(PREFS_FILE, "w") as f: json.dump(prefs, f)
+    def update_pref(key, value):
+        st.session_state.ui_prefs[key] = value
+        save_prefs(st.session_state.ui_prefs)
+
     st.header("分析配置")
     selected_ticker = st.text_input("请输入股票代码:", value="").upper()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
@@ -348,18 +356,35 @@ with st.sidebar:
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
     selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
     selected_research_depth = depth_options[selected_depth_name]
+
+    # 【新增】回溯天数选择
+    saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+    selected_lookback_days = st.slider(
+        "分析回溯窗口 (天):", 
+        min_value=5, 
+        max_value=120, 
+        value=saved_lookback,
+        help="设定 AI 分析技术指标和价格走势时向回搜索的时间范围（自然日）。"
+    )
+    if selected_lookback_days != saved_lookback:
+        update_pref("lookback_days", selected_lookback_days)
+    
+    # 【新增】新闻/情绪回溯天数选择
+    saved_news_lookback = st.session_state.ui_prefs.get("news_lookback_days", 7)
+    selected_news_lookback_days = st.slider(
+        "新闻/情绪分析窗口 (天):", 
+        min_value=1, 
+        max_value=30, 
+        value=saved_news_lookback,
+        help="设定 AI 分析新闻和社交媒体情绪时向回搜索的时间范围（自然日）。"
+    )
+    if selected_news_lookback_days != saved_news_lookback:
+        update_pref("news_lookback_days", selected_news_lookback_days)
     
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
     st.subheader("存储位置")
     saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
-    
-    # 定义更新首选项的辅助函数 (已上移)
-    def save_prefs(prefs):
-        with open(".ui_prefs.json", "w") as f: json.dump(prefs, f)
-    def update_pref(key, value):
-        st.session_state.ui_prefs[key] = value
-        save_prefs(st.session_state.ui_prefs)
 
     # --- 【新增】原生文件夹选择逻辑 ---
     col_path, col_btn = st.columns([3, 1])
@@ -563,12 +588,19 @@ if st.session_state.start_analysis and not st.session_state.final_state:
             "llm_provider": selected_llm_provider_name.lower(), 
             "api_key": str(input_api_key).strip() if input_api_key else None,
             "has_position": st.session_state.get("has_position", "未持有"),
-            "results_dir": str(RESULTS_DIR) # 确保 config 中有 results_dir
+            "results_dir": str(RESULTS_DIR), # 确保 config 中有 results_dir
+            "lookback_days": selected_lookback_days,
+            "news_lookback_days": selected_news_lookback_days
         })
         
         with st.spinner("正在初始化分析图..."):
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
-            init_agent_state = graph.propagator.create_initial_state(selected_ticker, analysis_date)
+            init_agent_state = graph.propagator.create_initial_state(
+                selected_ticker, 
+                analysis_date, 
+                selected_lookback_days,
+                selected_news_lookback_days
+            )
             args = graph.propagator.get_graph_args()
             
 
