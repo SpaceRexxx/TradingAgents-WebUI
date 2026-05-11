@@ -7,14 +7,15 @@
 # - 实时更新代理状态和进度
 
 import streamlit as st
+import streamlit.components.v1 as _st_components
 import datetime
 from pathlib import Path
 import re
 import io
 import asyncio
-import os  # 【新增】
-import json  # 【新增】
-import subprocess # 【新增】原生文件夹选择支持 (绕过 macOS 线程限制)
+import os
+import json
+import subprocess
 import platform
 
 # 自动加载 .env 文件（兼容未激活 conda 环境的情况）
@@ -67,6 +68,34 @@ from cli.models import AnalystType
 
 # --- 页面基础配置 ---
 st.set_page_config(layout="wide", page_title="TradingAgents Web")
+
+# Fix browser autocomplete warnings: Streamlit renders inputs with autocomplete=""
+# (empty string), which browsers flag as invalid. Inject via components iframe so
+# the script can walk up to window.parent and patch all inputs in the main document.
+_st_components.html("""
+<script>
+(function() {
+    function patch(doc) {
+        doc.querySelectorAll('input').forEach(function(el) {
+            var ac = el.getAttribute('autocomplete');
+            if (ac === null || ac === '') {
+                el.setAttribute('autocomplete', el.type === 'password' ? 'off' : 'off');
+            }
+        });
+    }
+    function run() {
+        try { patch(window.parent.document); } catch(e) {}
+        try { patch(document); } catch(e) {}
+    }
+    var observer = new MutationObserver(run);
+    try {
+        observer.observe(window.parent.document.body, { childList: true, subtree: true });
+    } catch(e) {}
+    run();
+})();
+</script>
+""", height=0)
+
 st.title("📈 TradingAgents: 智能交易分析框架")
 
 # --- 定义团队结构 ---
