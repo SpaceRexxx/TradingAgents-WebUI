@@ -9,11 +9,23 @@ import hashlib
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
+from typing import TYPE_CHECKING, Generator
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+if TYPE_CHECKING:
+    from langgraph.checkpoint.sqlite import SqliteSaver
 
 from tradingagents.dataflows.utils import safe_ticker_component
+
+
+def _get_sqlite_saver():
+    try:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        return SqliteSaver
+    except ImportError:
+        raise ImportError(
+            "checkpoint_enabled requires 'langgraph-checkpoint-sqlite'. "
+            "Install it with: pip install langgraph-checkpoint-sqlite"
+        )
 
 
 def _db_path(data_dir: str | Path, ticker: str) -> Path:
@@ -31,8 +43,9 @@ def thread_id(ticker: str, date: str) -> str:
 
 
 @contextmanager
-def get_checkpointer(data_dir: str | Path, ticker: str) -> Generator[SqliteSaver, None, None]:
+def get_checkpointer(data_dir: str | Path, ticker: str) -> Generator:
     """Context manager yielding a SqliteSaver backed by a per-ticker DB."""
+    SqliteSaver = _get_sqlite_saver()
     db = _db_path(data_dir, ticker)
     conn = sqlite3.connect(str(db), check_same_thread=False)
     try:
