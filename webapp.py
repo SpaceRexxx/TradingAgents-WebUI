@@ -65,6 +65,7 @@ from playwright.sync_api import sync_playwright
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
+from tradingagents.storage import sqlite_history
 
 # --- 页面基础配置 ---
 st.set_page_config(layout="wide", page_title="TradingAgents Web")
@@ -500,6 +501,22 @@ def save_analysis_results(final_state, ticker, analysis_date, config, pdf_data):
         try:
             load_historical_analyses_cached.clear()
         except Exception:
+            pass
+        # 5. 把新分析索引进 SQLite，启用快速查询和 A/B 对比
+        try:
+            sqlite_history.index_one_analysis(
+                config["results_dir"],
+                ticker=ticker,
+                trade_date=analysis_date,
+                json_path=str(json_file_path),
+                pdf_path=str(pdf_file_path),
+                decision_text=final_state.get("final_trade_decision", ""),
+                model=config.get("deep_think_llm"),
+                provider=config.get("llm_provider"),
+                has_position=config.get("has_position"),
+            )
+        except Exception as _exc:
+            # 索引失败不影响主流程
             pass
         return True
     except Exception as e:
@@ -1204,15 +1221,72 @@ with tab_history:
     # 显式调用缓存版本；2 分钟 TTL 内多次切换 tab 不会重复扫盘
     historical_analyses = load_historical_analyses_cached(str(RESULTS_DIR))
 
+    # Stage 5：自动同步 SQLite 索引（首次进入 tab 时把磁盘的 JSON 索引进 DB）
+    try:
+        _new_indexed = sqlite_history.rebuild_from_disk(RESULTS_DIR)
+        if _new_indexed > 0:
+            st.success(f"✅ 已自动索引 {_new_indexed} 条新历史记录到 SQLite")
+    except Exception as _exc:
+        st.warning(f"⚠️ SQLite 索引初始化失败（不影响功能）：{_exc}")
+
+    _db_stats = sqlite_history.stats(RESULTS_DIR)
+
     if not historical_analyses:
         st.info("📭 暂无历史记录。完成一次新分析后会自动出现在这里。")
     else:
-        # 顶部统计行
+        # 顶部统计行（含 SQLite 索引的评级分布）
         _total_runs = sum(len(r) for r in historical_analyses.values())
         st.markdown(
             f"📊 共 **{len(historical_analyses)}** 只标的 · "
             f"**{_total_runs}** 次历史分析"
         )
+        if _db_stats["by_rating"]:
+            _rating_chips = " · ".join(
+                f"{r}：**{c}**" for r, c in _db_stats["by_rating"].items()
+            )
+            st.caption(f"评级分布：{_rating_chips}")
+
+        # 三个功能按钮：CSV 导出 / 评级筛选 / 切换视图模式
+        _bcol1, _bcol2, _bcol3 = st.columns([1, 1, 1])
+        with _bcol1:
+            # CSV 导出（基于 SQLite 索引）
+            _csv_rows = sqlite_history.query_analyses(RESULTS_DIR)
+            if _csv_rows:
+                import io as _io
+                import csv as _csv
+                _csv_buf = _io.StringIO()
+                _writer = _csv.DictWriter(
+                    _csv_buf,
+                    fieldnames=["ticker", "trade_date", "rating", "summary",
+                                "model", "provider", "has_position", "created_at"],
+                    extrasaction="ignore",
+                )
+                _writer.writeheader()
+                for _r in _csv_rows:
+                    _writer.writerow(_r)
+                st.download_button(
+                    "📥 导出 CSV",
+                    data=_csv_buf.getvalue().encode("utf-8-sig"),
+                    file_name=f"tradingagents_history_{datetime.date.today()}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+        with _bcol2:
+            _rating_filter = st.selectbox(
+                "📌 评级筛选",
+                options=["全部", "Buy", "Overweight", "Hold", "Underweight", "Sell"],
+                index=0,
+                key="history_rating_filter",
+                label_visibility="collapsed",
+            )
+        with _bcol3:
+            _view_mode = st.selectbox(
+                "👁️ 视图模式",
+                options=["卡片网格", "A/B 对比"],
+                index=0,
+                key="history_view_mode",
+                label_visibility="collapsed",
+            )
 
         # 顶部搜索框（即时过滤）
         _filter = st.text_input(
@@ -1229,10 +1303,82 @@ with tab_history:
                 or any(_filter in r["date"] for r in historical_analyses[t])
             ]
 
+        # 评级筛选（基于 SQLite 索引）
+        _filtered_paths_by_ticker: dict[str, set] = {}
+        if _rating_filter != "全部":
+            _rows = sqlite_history.query_analyses(RESULTS_DIR, rating=_rating_filter)
+            for _r in _rows:
+                _filtered_paths_by_ticker.setdefault(_r["ticker"], set()).add(_r["trade_date"])
+            _sorted_tickers = [t for t in _sorted_tickers if t in _filtered_paths_by_ticker]
+
         if not _sorted_tickers:
-            st.warning(f"未找到匹配 '{_filter}' 的记录。")
+            st.warning(f"未找到匹配条件的记录。")
+        elif _view_mode == "A/B 对比":
+            # === A/B 对比视图：选两份分析左右对照 ===
+            st.markdown("---")
+            st.markdown("### 🔬 A/B 对比")
+            st.caption("选择两份分析进行左右对照，便于观察同一标的不同时间，或不同标的同期。")
+
+            # 构造所有可选项
+            _ab_options = []
+            for _t in _sorted_tickers:
+                for _r in historical_analyses[_t]:
+                    if (_rating_filter == "全部"
+                        or _r["date"] in _filtered_paths_by_ticker.get(_t, set())):
+                        _ab_options.append((f"{_t} · {_r['date']}", _t, _r))
+
+            _ab_col1, _ab_col2 = st.columns(2)
+            with _ab_col1:
+                _sel_a = st.selectbox(
+                    "左侧 A",
+                    options=range(len(_ab_options)),
+                    format_func=lambda i: _ab_options[i][0],
+                    key="ab_sel_a",
+                )
+            with _ab_col2:
+                _sel_b = st.selectbox(
+                    "右侧 B",
+                    options=range(len(_ab_options)),
+                    format_func=lambda i: _ab_options[i][0],
+                    index=min(1, len(_ab_options) - 1),
+                    key="ab_sel_b",
+                )
+
+            # 加载两份 JSON
+            def _load_json_safe(json_path):
+                try:
+                    with open(json_path, "r", encoding="utf-8") as _f:
+                        return json.load(_f)
+                except Exception:
+                    return {}
+
+            _a_label, _a_ticker, _a_run = _ab_options[_sel_a]
+            _b_label, _b_ticker, _b_run = _ab_options[_sel_b]
+            _a_data = _load_json_safe(_a_run["json_path"])
+            _b_data = _load_json_safe(_b_run["json_path"])
+
+            _diff_col1, _diff_col2 = st.columns(2)
+            for _data, _label, _col in [(_a_data, _a_label, _diff_col1),
+                                          (_b_data, _b_label, _diff_col2)]:
+                with _col:
+                    with st.container(border=True):
+                        st.markdown(f"### 📊 {_label}")
+                        for _key, _title in [
+                            ("market_report", "市场分析"),
+                            ("news_report", "新闻分析"),
+                            ("sentiment_report", "舆情分析"),
+                            ("fundamentals_report", "基本面分析"),
+                            ("investment_plan", "研究经理决策"),
+                            ("trader_investment_plan", "交易员提案"),
+                            ("final_trade_decision", "🎯 最终决策"),
+                        ]:
+                            _content = _data.get(_key, "")
+                            if _content:
+                                with st.expander(f"{_title}（{len(_content)} 字）",
+                                                 expanded=(_key == "final_trade_decision")):
+                                    st.markdown(_content, unsafe_allow_html=True)
         else:
-            # 三列卡片网格，便于快速扫视
+            # === 卡片网格视图（默认）===
             _cols_per_row = 3
             _ticker_rows = [
                 _sorted_tickers[i:i + _cols_per_row]
@@ -1241,7 +1387,14 @@ with tab_history:
             for _row in _ticker_rows:
                 _cols = st.columns(_cols_per_row)
                 for _col, _ticker in zip(_cols, _row):
-                    _runs = historical_analyses[_ticker]
+                    # 应用评级过滤
+                    if _rating_filter != "全部":
+                        _runs = [r for r in historical_analyses[_ticker]
+                                 if r["date"] in _filtered_paths_by_ticker.get(_ticker, set())]
+                    else:
+                        _runs = historical_analyses[_ticker]
+                    if not _runs:
+                        continue
                     with _col:
                         with st.container(border=True):
                             st.markdown(f"### {_ticker}")
