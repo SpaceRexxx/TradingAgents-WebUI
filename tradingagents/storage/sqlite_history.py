@@ -76,6 +76,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             created_at   TEXT NOT NULL DEFAULT (datetime('now')),
             json_path    TEXT NOT NULL,
             pdf_path     TEXT,
+            note         TEXT,           -- Stage 8: 用户备注
             UNIQUE(ticker, trade_date)
         );
         CREATE INDEX IF NOT EXISTS idx_analyses_ticker     ON analyses(ticker);
@@ -83,6 +84,13 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_analyses_rating     ON analyses(rating);
         """
     )
+    # 兼容旧表：如缺少 note 列就补
+    try:
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(analyses)")}
+        if "note" not in cols:
+            conn.execute("ALTER TABLE analyses ADD COLUMN note TEXT")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +257,31 @@ def query_analyses(
         _init_schema(conn)
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def set_note(results_dir: Path | str, ticker: str, trade_date: str, note: str) -> None:
+    """更新一条分析的用户备注（Stage 8）。"""
+    results_dir = Path(results_dir)
+    with _connect(results_dir) as conn:
+        _init_schema(conn)
+        conn.execute(
+            "UPDATE analyses SET note = ? WHERE ticker = ? AND trade_date = ?",
+            (note, ticker, trade_date),
+        )
+
+
+def get_note(results_dir: Path | str, ticker: str, trade_date: str) -> str:
+    """读取一条分析的用户备注；不存在则返回空串。"""
+    results_dir = Path(results_dir)
+    if not _db_path(results_dir).exists():
+        return ""
+    with _connect(results_dir) as conn:
+        _init_schema(conn)
+        row = conn.execute(
+            "SELECT note FROM analyses WHERE ticker = ? AND trade_date = ?",
+            (ticker, trade_date),
+        ).fetchone()
+        return (row["note"] if row and row["note"] else "")
 
 
 def list_tickers(results_dir: Path | str) -> list[str]:

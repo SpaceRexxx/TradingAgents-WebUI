@@ -1276,6 +1276,41 @@ with tab_analyze:
             except Exception:
                 pass
 
+        # Stage 8: 个人备注 + 快速分享
+        with st.expander("📝 我的备注（点击编辑）", expanded=False):
+            try:
+                _existing_note = sqlite_history.get_note(RESULTS_DIR, ticker_from_state, date_from_state)
+            except Exception:
+                _existing_note = ""
+            _note_input = st.text_area(
+                "在这里记录你对本次分析的看法（保存到 SQLite，下次回看可见）",
+                value=_existing_note,
+                key=f"note_{ticker_from_state}_{date_from_state}",
+                height=120,
+            )
+            _save_col, _share_col = st.columns([1, 1])
+            with _save_col:
+                if st.button("💾 保存备注", use_container_width=True, key="save_note_btn"):
+                    try:
+                        sqlite_history.set_note(RESULTS_DIR, ticker_from_state, date_from_state, _note_input)
+                        st.success("✅ 备注已保存")
+                    except Exception as _exc:
+                        st.error(f"保存失败：{_exc}")
+            with _share_col:
+                # 一键生成"可分享的简报"（仅评级 + 摘要 + 备注），点击复制到 textarea
+                _decision = final_state.get("final_trade_decision", "")
+                _summary = (sqlite_history._extract_summary(_decision) or "（无）")[:300]
+                _rating = sqlite_history._extract_rating(_decision) or "未知"
+                _share_text = (
+                    f"📊 TradingAgents · {ticker_from_state} · {date_from_state}\n"
+                    f"评级：{_rating}\n"
+                    f"摘要：{_summary}\n"
+                    + (f"\n备注：{_note_input}" if _note_input else "")
+                )
+                if st.button("📤 生成分享简报", use_container_width=True, key="share_brief_btn"):
+                    st.code(_share_text, language="markdown")
+                    st.caption("👆 选中上方文本即可复制粘贴")
+
         st.markdown("---")
 
         button_text = "🙈 隐藏实时分析过程回顾" if st.session_state.show_live_report_view else "👀 显示实时分析过程回顾"
