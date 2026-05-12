@@ -222,6 +222,103 @@ def _get_opt_idx(opts: list, saved_val: str) -> int:
     return 0
 
 
+# --- UI helper：行动化错误与进度展示（Stage 2）---
+def show_error_with_fix(
+    title: str,
+    detail: str = "",
+    fix_steps: list[str] | None = None,
+    level: str = "error",
+):
+    """统一的"错误 + 修复建议"展示组件。
+
+    title: 简短错误标题（必填，例如 '缺少 API Key'）
+    detail: 详细描述（可选，例如 'DeepSeek 调用返回 401'）
+    fix_steps: 可执行的修复步骤列表（每条一句）
+    level: 'error' | 'warning' | 'info'
+    """
+    icon = "❌" if level == "error" else ("⚠️" if level == "warning" else "💡")
+    func = {"error": st.error, "warning": st.warning, "info": st.info}[level]
+    func(f"{icon} **{title}**" + (f"\n\n{detail}" if detail else ""))
+    if fix_steps:
+        with st.expander("📌 修复建议（点击展开）", expanded=True):
+            for i, step in enumerate(fix_steps, 1):
+                st.markdown(f"**{i}.** {step}")
+
+
+# 五阶段定义（用于进度 stepper）
+ANALYSIS_PHASES = [
+    {"key": "analysts", "label": "分析师团队", "icon": "📊"},
+    {"key": "research", "label": "研究团队辩论", "icon": "🥊"},
+    {"key": "trader",   "label": "交易团队",   "icon": "💼"},
+    {"key": "risk",     "label": "风险管理辩论", "icon": "⚖️"},
+    {"key": "decision", "label": "最终决策",   "icon": "🎯"},
+]
+
+
+def detect_current_phase(chunk: dict) -> tuple[str, int]:
+    """从 streaming chunk 推断当前所处阶段。返回 (phase_key, progress_0_100)。"""
+    if chunk.get("final_trade_decision"):
+        return "decision", 100
+    if chunk.get("risk_debate_state") and chunk["risk_debate_state"].get("history"):
+        return "risk", 85
+    if chunk.get("trader_investment_plan"):
+        return "trader", 70
+    if chunk.get("investment_plan"):
+        return "research", 55
+    if chunk.get("investment_debate_state") and chunk["investment_debate_state"].get("history"):
+        return "research", 35
+    if any(chunk.get(f"{k}_report") for k in ("market", "news", "sentiment", "fundamentals")):
+        return "analysts", 15
+    return "analysts", 5
+
+
+def render_phase_stepper(current_phase_key: str, elapsed_seconds: float | None = None):
+    """渲染 5 阶段水平进度卡片。"""
+    # 确定每个阶段的状态：done / active / pending
+    phase_keys = [p["key"] for p in ANALYSIS_PHASES]
+    try:
+        current_idx = phase_keys.index(current_phase_key)
+    except ValueError:
+        current_idx = 0
+
+    cols = st.columns(len(ANALYSIS_PHASES))
+    for i, (col, phase) in enumerate(zip(cols, ANALYSIS_PHASES)):
+        with col:
+            if i < current_idx:
+                state_icon = "✅"
+                bg = "#1e3a2f"   # 深绿
+                label_color = "#9be9a8"
+            elif i == current_idx:
+                state_icon = "⏳"
+                bg = "#3a3520"   # 深黄
+                label_color = "#f7ce46"
+            else:
+                state_icon = "⚪"
+                bg = "#1f2937"   # 深灰
+                label_color = "#94a3b8"
+            st.markdown(
+                f"""<div style="background:{bg};border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:22px;line-height:1.2;">{phase['icon']}</div>
+                <div style="color:{label_color};font-size:12px;font-weight:600;margin-top:4px;">{phase['label']}</div>
+                <div style="color:{label_color};font-size:14px;margin-top:2px;">{state_icon}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    # 已耗时显示
+    if elapsed_seconds is not None and elapsed_seconds > 0:
+        st.caption(f"⏱️ 已耗时：**{format_elapsed(elapsed_seconds)}**" +
+                   (f" · 当前阶段：**{ANALYSIS_PHASES[current_idx]['label']}**" if current_idx < len(ANALYSIS_PHASES) else ""))
+
+
+def format_elapsed(seconds: float) -> str:
+    """把秒数格式化为 'M 分 SS 秒'。"""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds} 秒"
+    return f"{seconds // 60} 分 {seconds % 60:02d} 秒"
+
+
 # --- Helper 函数 ---
 def reset_state():
     """重置整个应用的会话状态，用于开始新的分析"""
@@ -583,10 +680,23 @@ with st.sidebar:
         has_key = bool(input_api_key) or (target_env_var and os.environ.get(target_env_var))
         
         if not selected_ticker:
-            st.error("请输入股票代码（Ticker），例如 NVDA")
+            show_error_with_fix(
+                "请先输入股票代码",
+                fix_steps=[
+                    "在侧边栏 **请输入股票代码** 输入框填入 ticker，例如：`NVDA`、`AAPL`、`300990.SZ`、`600519.SS`、`0700.HK`。",
+                    "A 股标的会自动走中文数据源（东方财富 / 雪球 / 新浪 / akshare），美股 / 港股保持原有 Yahoo / StockTwits / Reddit 路径。",
+                ],
+            )
         elif not has_key:
-            st.error(f"❌ 缺少 API Key！请在左侧填入 {selected_llm_provider_name} 的 Key，或点击下方按钮保存到本地。")
-            st.info("💡 提示：您可以点击侧边栏的『保存到 .env』按钮，这样下次启动就不用再填了。")
+            show_error_with_fix(
+                f"缺少 {selected_llm_provider_name} 的 API Key",
+                detail=f"环境变量 `{target_env_var or '???'}` 为空，且 ⚙️ 配置 tab 也未填入。",
+                fix_steps=[
+                    "切到顶部 **⚙️ 配置** tab，在 *API Key* 输入框填入 Key。",
+                    f"点击 **💾 保存 {selected_llm_provider_name} Key 到 .env**，下次启动自动加载。",
+                    f"或在终端运行 `export {target_env_var}=sk-xxx` 后重启 Streamlit。",
+                ],
+            )
         else:
             reset_state()
             # 针对并发模式：一开始就把所有的分析师状态设成进行中
@@ -617,11 +727,25 @@ with tab_analyze:
         with col1: status_placeholder = st.empty(); messages_placeholder = st.empty()
         with col2: report_placeholder = st.empty()
 
-        if not selected_analysts: 
-            st.sidebar.error("请至少选择一位分析师。")
+        if not selected_analysts:
+            show_error_with_fix(
+                "未选择任何分析师",
+                fix_steps=[
+                    "在侧边栏 **请选择分析师团队** 多选框里至少选一位。",
+                    "通常 4 位全选（市场 / 舆情 / 新闻 / 基本面），决策最完整。",
+                ],
+            )
             st.session_state.start_analysis = False
-        elif not shallow_thinker or not deep_thinker: 
-            st.sidebar.error("请为选择的提供商选择模型。")
+        elif not shallow_thinker or not deep_thinker:
+            show_error_with_fix(
+                f"{selected_llm_provider_name} 缺少模型选择",
+                detail="快速思考引擎或深度思考引擎为空。",
+                fix_steps=[
+                    "切到顶部 **⚙️ 配置** tab。",
+                    "在 *快速思考引擎* 和 *深度思考引擎* 下拉框中各选一个模型。",
+                    "推荐组合：快速 = `deepseek-v4-flash`、深度 = `deepseek-v4-pro`。",
+                ],
+            )
             st.session_state.start_analysis = False
         else:
             config = DEFAULT_CONFIG.copy(); 
@@ -656,17 +780,20 @@ with tab_analyze:
 
 
             final_chunk_for_state = None
+            # 启动计时
+            import time as _time
+            _stream_start_ts = _time.time()
             try:
                 for chunk in graph.graph.stream(init_agent_state, **args):
                     final_chunk_for_state = chunk
-                    progress_value = 0; progress_text = "分析已开始..."
-                    if chunk.get("final_trade_decision"): progress_value = 100; progress_text = "阶段 5/5: 已生成最终决策"
-                    elif chunk.get("risk_debate_state") and chunk["risk_debate_state"]["history"]: progress_value = 85; progress_text = "阶段 4/5: 风险管理团队辩论中..."
-                    elif chunk.get("trader_investment_plan"): progress_value = 70; progress_text = "阶段 3/5: 交易团队制定计划中..."
-                    elif chunk.get("investment_plan"): progress_value = 50; progress_text = "阶段 2/5: 研究经理决策中..."
-                    elif chunk.get("investment_debate_state") and chunk["investment_debate_state"]["history"]: progress_value = 35; progress_text = "阶段 2/5: 研究团队辩论中..."
-                    elif any(chunk.get(f"{a.value}_report") for a in selected_analysts): progress_value = 15; progress_text = "阶段 1/5: 分析师团队收集中..."
-                    progress_placeholder.progress(progress_value, text=progress_text)
+                    # 检测当前阶段（基于 chunk 内容推断）
+                    _phase_key, _progress_pct = detect_current_phase(chunk)
+                    _elapsed = _time.time() - _stream_start_ts
+
+                    # 渲染 5 阶段 stepper（替代原来单一进度条）+ 已耗时
+                    with progress_placeholder.container():
+                        render_phase_stepper(_phase_key, elapsed_seconds=_elapsed)
+                        st.progress(_progress_pct, text=f"总进度 {_progress_pct}%")
 
                     # 为下方的调试监控器预留一个循环内可更新的占位符（仅首次进入时有效）
                     if 'live_debug_placeholder' not in locals():
@@ -778,16 +905,58 @@ with tab_analyze:
             except Exception as e:
                 if "last_chunk_raw" in st.session_state:
                     st.session_state.last_chunk_raw["异常中断"] = f"是 - {str(e)}"
-                st.error(f"❌ 分析出错: {str(e)}")
-                with st.expander("🔍 错误详细追踪"):
+                _err = str(e)
+                _low_err = _err.lower()
+                # 智能识别错误类型并给出有针对性的建议
+                if "401" in _err or "unauthorized" in _low_err or "api key" in _low_err:
+                    _fix_steps = [
+                        "前往 ⚙️ 配置 tab，确认 API Key 已正确填入并保存。",
+                        "在终端运行 `echo $DEEPSEEK_API_KEY` 确认环境变量也有值。",
+                        "如果 key 是新申请的，等几分钟让 DeepSeek 后台同步。",
+                    ]
+                elif "rate limit" in _low_err or "429" in _err:
+                    _fix_steps = [
+                        "DeepSeek API 已触发限流。等 30-60 秒后重试。",
+                        "考虑改用 `deepseek-v4-flash` 替代 `deepseek-v4-pro`，速度快、限流低。",
+                    ]
+                elif "connection" in _low_err or "timeout" in _low_err or "network" in _low_err:
+                    _fix_steps = [
+                        "检查网络连接（尤其代理是否还连得通：`curl -x $HTTPS_PROXY https://api.deepseek.com`）。",
+                        "DeepSeek 的 endpoint 偶尔抽风，1-2 分钟后重试。",
+                        "如果是 OpenCLI 命令失败，检查 Chrome 是否还在运行。",
+                    ]
+                elif "structured-output" in _low_err or "nonetype" in _low_err:
+                    _fix_steps = [
+                        "可能是模型不稳定地未返回结构化输出。自动回退到 free-text 应能恢复。",
+                        "如反复出现，前往 ⚙️ 配置 tab 把模型切换到 `deepseek-v4-pro`（结构化输出更稳）。",
+                    ]
+                elif "valueerror" in _low_err and ("indicator" in _low_err or "ticker" in _low_err):
+                    _fix_steps = [
+                        "工具调用参数错误，重试一般能恢复。",
+                        "如果是 ticker 格式问题，确认 A 股用 `300990.SZ` / `600519.SS` 格式。",
+                    ]
+                else:
+                    _fix_steps = [
+                        "展开下方『完整错误堆栈』查看具体出错位置。",
+                        "前往 🏥 诊断 tab 检查依赖是否都正常。",
+                        "如果反复出现，重启 Streamlit 后重试。",
+                    ]
+
+                show_error_with_fix(
+                    "分析过程出错",
+                    detail=f"`{_err[:200]}`" + ("..." if len(_err) > 200 else ""),
+                    fix_steps=_fix_steps,
+                )
+
+                with st.expander("🔍 完整错误堆栈（点击展开）"):
                     import traceback
                     st.code(traceback.format_exc())
-                st.warning("⚠️ 提示: 如果这是连接错误，请检查网络；如果是 ValueError，可能是指标名称不合法（现已修复体积/指标大部分兼容性问题）。")
+
                 st.session_state.start_analysis = False
                 st.session_state.final_state = final_chunk_for_state
-                if st.session_state.previous_sender: 
+                if st.session_state.previous_sender:
                     st.session_state.agent_status[st.session_state.previous_sender] = "completed"
-                st.button("分析已中断，点击重试", on_click=reset_state)
+                st.button("🔄 重置并重试", on_click=reset_state, use_container_width=True)
 
     # 2. 分析完成后的视图 (新分析 或 加载的历史)
     elif st.session_state.final_state:
