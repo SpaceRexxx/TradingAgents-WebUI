@@ -333,9 +333,19 @@ def reset_state():
     st.session_state.current_analysis_paths = None # 【新增】
     st.session_state.pdf_data = None # 【新增】
 
-# 【新增】加载历史记录的函数
+# 【新增】加载历史记录的函数（Stage 3：cache_data 加速）
+@st.cache_data(ttl=120, show_spinner=False)
+def load_historical_analyses_cached(base_dir_str: str):
+    """带缓存的历史目录扫描；2 分钟内重复调用直接复用结果。
+
+    ``base_dir_str`` 必须是字符串（cache_data 要求参数 hashable），
+    新分析完成后会用 ``st.cache_data.clear()`` 显式失效。
+    """
+    return load_historical_analyses(Path(base_dir_str))
+
+
 def load_historical_analyses(base_dir):
-    """扫描结果目录并返回一个按 Ticker 分组的字典"""
+    """扫描结果目录并返回一个按 Ticker 分组的字典（无缓存版本，cached 包一层）"""
     history = {}
     json_files = list(base_dir.rglob("final_state_report.json"))
     for json_path in json_files:
@@ -366,6 +376,11 @@ def load_historical_analyses(base_dir):
 def load_selected_analysis(json_path):
     """加载选定的历史 JSON 文件到 session_state"""
     reset_state() # 首先清空当前状态
+    # 用户切换历史记录 → 顺便清掉历史扫描缓存，确保下次 tab_history 看最新
+    try:
+        load_historical_analyses_cached.clear()
+    except Exception:
+        pass
     try:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -401,6 +416,11 @@ def save_analysis_results(final_state, ticker, analysis_date, config, pdf_data):
             'json': str(json_file_path),
             'pdf': str(pdf_file_path)
         }
+        # 4. 失效历史扫描缓存，下次进入 📚 历史分析 tab 能看到新记录
+        try:
+            load_historical_analyses_cached.clear()
+        except Exception:
+            pass
         return True
     except Exception as e:
         st.error(f"保存分析结果时出错: {e}")
@@ -1060,7 +1080,8 @@ with tab_analyze:
 with tab_history:
     st.subheader("📚 历史分析记录")
     st.caption(f"当前存储目录：`{RESULTS_DIR}`")
-    historical_analyses = load_historical_analyses(RESULTS_DIR)
+    # 显式调用缓存版本；2 分钟 TTL 内多次切换 tab 不会重复扫盘
+    historical_analyses = load_historical_analyses_cached(str(RESULTS_DIR))
 
     if not historical_analyses:
         st.info("📭 暂无历史记录。完成一次新分析后会自动出现在这里。")
@@ -1125,8 +1146,15 @@ with tab_history:
 
 # ---- 🏥 诊断 ----
 with tab_diagnostic:
-    st.header("🏥 系统健康检查")
-    st.caption("检测各项依赖是否就绪。建议每次启动后看一眼，避免分析跑到一半才发现缺组件。")
+    _h_col1, _h_col2 = st.columns([4, 1])
+    with _h_col1:
+        st.header("🏥 系统健康检查")
+        st.caption("检测各项依赖是否就绪。建议每次启动后看一眼，避免分析跑到一半才发现缺组件。结果默认缓存 5 分钟。")
+    with _h_col2:
+        st.write("")  # 垂直对齐
+        if st.button("🔄 重新检查", help="强制重新扫描依赖（清缓存）", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
     # 整理检查列表
     _diag_results = []
@@ -1146,9 +1174,32 @@ with tab_diagnostic:
         "fix": "前往 ⚙️ 配置 tab 填入 API Key，并点击 💾 保存到 .env" if not _has_key else None,
     })
 
-    # 2) OpenCLI 是否在 PATH（雪球 / Reddit / 新浪 都依赖它）
-    import shutil as _shutil
-    _opencli_path = _shutil.which("opencli")
+    # 2-4) 依赖检查通过 cache_data 缓存，避免每次 rerun 都重新 import akshare/playwright
+    @st.cache_data(ttl=300, show_spinner=False)
+    def _diag_dependency_checks():
+        """返回 (opencli_path | None, akshare_version | None, playwright_ok | error_str)"""
+        import shutil as _shutil
+        _opencli = _shutil.which("opencli")
+
+        _ak_v = None
+        try:
+            import akshare as _ak
+            _ak_v = getattr(_ak, "__version__", "?")
+        except Exception:
+            pass
+
+        _pw = True
+        _pw_err = ""
+        try:
+            from playwright.sync_api import sync_playwright as _spw  # noqa
+        except Exception as _e:
+            _pw = False
+            _pw_err = str(_e)
+
+        return _opencli, _ak_v, _pw, _pw_err
+
+    _opencli_path, _ak_version, _pw_ok, _pw_err = _diag_dependency_checks()
+
     _diag_results.append({
         "name": "OpenCLI 浏览器桥",
         "ok": bool(_opencli_path),
@@ -1156,35 +1207,16 @@ with tab_diagnostic:
                   else "❌ 未找到 `opencli` 命令",
         "fix": "运行 `npm install -g @jackwener/opencli` 并安装 Chrome 扩展" if not _opencli_path else None,
     })
-
-    # 3) akshare 是否可 import（A 股数据源）
-    _ak_ok = False
-    _ak_version = "?"
-    try:
-        import akshare as _ak  # noqa
-        _ak_ok = True
-        _ak_version = getattr(_ak, "__version__", "?")
-    except ImportError as _exc:
-        _ak_exc = str(_exc)
     _diag_results.append({
         "name": "akshare 数据库",
-        "ok": _ak_ok,
-        "detail": f"已安装 v{_ak_version}" if _ak_ok else f"❌ 未安装",
-        "fix": "运行 `pip install akshare`" if not _ak_ok else None,
+        "ok": bool(_ak_version),
+        "detail": f"已安装 v{_ak_version}" if _ak_version else "❌ 未安装",
+        "fix": "运行 `pip install akshare`" if not _ak_version else None,
     })
-
-    # 4) Playwright Chromium（PDF 导出依赖）
-    _pw_ok = False
-    try:
-        from playwright.sync_api import sync_playwright as _spw  # noqa
-        # 不实际启动 browser（耗时），只检查 import
-        _pw_ok = True
-    except Exception as _exc:
-        _pw_exc = str(_exc)
     _diag_results.append({
         "name": "Playwright (PDF 导出)",
         "ok": _pw_ok,
-        "detail": "已安装" if _pw_ok else f"❌ 未安装：{_pw_exc[:80]}",
+        "detail": "已安装" if _pw_ok else f"❌ 未安装：{_pw_err[:80]}",
         "fix": "运行 `pip install playwright && playwright install chromium`" if not _pw_ok else None,
     })
 
