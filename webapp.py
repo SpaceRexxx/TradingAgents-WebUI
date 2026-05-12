@@ -97,6 +97,20 @@ _st_components.html("""
 </script>
 """, height=0)
 
+# --- Stage 9: 数据源降级检测（启动时一次性 quick health） ---
+def _detect_degraded_sources() -> list[str]:
+    """轻量检测：哪些数据源不可用，返回降级原因列表。"""
+    degraded = []
+    import shutil as _shutil
+    if not _shutil.which("opencli"):
+        degraded.append("OpenCLI 未安装 → 雪球 / Reddit / 新浪 数据源不可用")
+    try:
+        import akshare  # noqa
+    except ImportError:
+        degraded.append("akshare 未安装 → A 股数据源不可用（千股千评 / 公告 / 财联社）")
+    return degraded
+
+
 # --- 全局 CSS 视觉系统（Stage 4）---
 st.markdown(
     """
@@ -178,6 +192,17 @@ with _t_col2:
         st.caption(f"🔌 {_hdr_provider}  ·  🧠 {_hdr_deep}")
     except Exception:
         pass
+
+# Stage 9: 启动时检测降级数据源并在顶部展示 banner
+_degraded = _detect_degraded_sources()
+if _degraded:
+    with st.container(border=True):
+        st.warning(
+            "⚠️ **部分数据源降级运行中**　·　不影响主流程，但相关报告会简化。"
+        )
+        for _reason in _degraded:
+            st.caption(f"• {_reason}")
+        st.caption("👉 详细诊断和修复建议见 **🏥 诊断** tab")
 
 # --- 定义团队结构 ---
 TEAMS_STRUCTURE = {
@@ -945,6 +970,20 @@ with st.sidebar:
     has_position = "已持有" if "是" in position_status_option else "未持有"
     st.markdown("---")
     
+    # Stage 9: 如果当前 ticker+date 有 checkpoint，提示用户可以续跑
+    if selected_ticker:
+        try:
+            from tradingagents.graph.checkpointer import has_checkpoint, checkpoint_step
+            _data_cache = DEFAULT_CONFIG.get("data_cache_dir")
+            if _data_cache and has_checkpoint(_data_cache, selected_ticker, analysis_date):
+                _step = checkpoint_step(_data_cache, selected_ticker, analysis_date)
+                st.info(
+                    f"💾 检测到 **{selected_ticker} · {analysis_date}** 的未完成分析（步骤 {_step}），"
+                    f"开启 `checkpoint_enabled` 后开始分析将自动续跑。"
+                )
+        except Exception:
+            pass
+
     # 【修改】"开始分析" 前进行前置校验
     if st.button("🚀 开始分析", use_container_width=True, type="primary"):
         # 获取当前提供商对应的环境变量名
