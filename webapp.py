@@ -66,6 +66,10 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from tradingagents.storage import sqlite_history
+from tradingagents.logging_config import configure_logging
+
+# Stage 11: 初始化全局结构化日志
+configure_logging()
 
 # --- 页面基础配置 ---
 st.set_page_config(layout="wide", page_title="TradingAgents Web")
