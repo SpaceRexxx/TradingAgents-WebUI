@@ -902,6 +902,52 @@ with st.sidebar:
     _ticker_default = st.session_state.pop("_ticker_quick", "")
     selected_ticker = st.text_input("请输入股票代码:", value=_ticker_default).upper()
 
+    # Stage 10: 实时价格快照（输入 ticker 后实时显示当前价 / 涨跌幅）
+    if selected_ticker:
+        @st.cache_data(ttl=60, show_spinner=False)
+        def _live_quote(ticker: str) -> dict | None:
+            """通过 OpenCLI xueqiu stock 获取实时报价；1 分钟内缓存。"""
+            import subprocess as _sub
+            import shutil as _sh
+            if not _sh.which("opencli"):
+                return None
+            # 把 ticker 转成 xueqiu 格式
+            try:
+                from tradingagents.dataflows.xueqiu import to_xueqiu_symbol
+                symbol = to_xueqiu_symbol(ticker)
+            except Exception:
+                symbol = ticker
+            try:
+                proc = _sub.run(
+                    ["opencli", "xueqiu", "stock", symbol, "-f", "json"],
+                    capture_output=True, text=True, timeout=8,
+                )
+                if proc.returncode == 0 and proc.stdout:
+                    data = json.loads(proc.stdout)
+                    if isinstance(data, list) and data:
+                        return data[0]
+                    if isinstance(data, dict):
+                        return data
+            except Exception:
+                pass
+            return None
+
+        _quote = _live_quote(selected_ticker)
+        if _quote:
+            _price = _quote.get("price")
+            _name = _quote.get("name", "")
+            _chg_pct = _quote.get("changePercent", "")
+            _is_up = isinstance(_quote.get("change"), (int, float)) and _quote["change"] >= 0
+            _arrow = "🟢↑" if _is_up else "🔴↓"
+            with st.container(border=True):
+                st.markdown(f"**{_name or selected_ticker}** {_arrow}")
+                st.metric(
+                    "实时价格",
+                    f"{_price}" if _price else "—",
+                    delta=_chg_pct or None,
+                    label_visibility="collapsed",
+                )
+
     # 加 / 删自选股按钮
     if selected_ticker:
         _is_in_wl = selected_ticker in _watchlist
