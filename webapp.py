@@ -264,6 +264,46 @@ def update_pref(key: str, value) -> None:
     save_prefs(st.session_state.ui_prefs)
 
 
+# --- Stage 7: 分析模板（一键应用预置参数组合）---
+ANALYSIS_TEMPLATES = {
+    "🎯 标准（默认）": {
+        "depth": 2,
+        "lookback_days": 30,
+        "news_lookback_days": 7,
+        "analysts": ["市场分析师", "舆情分析师", "新闻分析师", "基本面分析师"],
+        "description": "中等深度，覆盖全部 4 个分析师，适合日常分析",
+    },
+    "⚡ 快速扫描": {
+        "depth": 0,
+        "lookback_days": 14,
+        "news_lookback_days": 3,
+        "analysts": ["市场分析师", "新闻分析师"],
+        "description": "极浅深度，只跑 2 个分析师，快速给出方向判断",
+    },
+    "🔬 深度调研": {
+        "depth": 3,
+        "lookback_days": 90,
+        "news_lookback_days": 14,
+        "analysts": ["市场分析师", "舆情分析师", "新闻分析师", "基本面分析师"],
+        "description": "3 轮深度辩论，长期视角，适合重要决策",
+    },
+    "📰 事件驱动": {
+        "depth": 1,
+        "lookback_days": 7,
+        "news_lookback_days": 3,
+        "analysts": ["新闻分析师", "舆情分析师"],
+        "description": "短窗口，专注新闻和舆情，适合突发事件分析",
+    },
+    "💎 价值投资": {
+        "depth": 2,
+        "lookback_days": 120,
+        "news_lookback_days": 14,
+        "analysts": ["基本面分析师", "市场分析师", "新闻分析师"],
+        "description": "长窗口 + 重基本面，适合中长线持有的判断",
+    },
+}
+
+
 # --- 各 LLM 提供商的元数据（模块级，供 sidebar/tabs 共享）---
 PROVIDER_OPTIONS = {
     "DeepSeek": "https://api.deepseek.com/v1",
@@ -819,37 +859,84 @@ with tab_config:
 # --- UI 组件 (侧边栏) ---
 with st.sidebar:
     st.header("分析配置")
-    selected_ticker = st.text_input("请输入股票代码:", value="").upper()
+
+    # Stage 7: Watchlist 快速选股
+    _watchlist = st.session_state.ui_prefs.get("watchlist", [])
+    if _watchlist:
+        with st.expander(f"⭐ 自选股 ({len(_watchlist)})", expanded=False):
+            _wl_cols = st.columns(3)
+            for _i, _t in enumerate(_watchlist):
+                _wl_cols[_i % 3].button(
+                    _t,
+                    key=f"wl_{_t}",
+                    use_container_width=True,
+                    on_click=lambda t=_t: st.session_state.update({"_ticker_quick": t}),
+                )
+
+    # 如果点了 watchlist 里的 ticker，用作 input 的默认值
+    _ticker_default = st.session_state.pop("_ticker_quick", "")
+    selected_ticker = st.text_input("请输入股票代码:", value=_ticker_default).upper()
+
+    # 加 / 删自选股按钮
+    if selected_ticker:
+        _is_in_wl = selected_ticker in _watchlist
+        _wl_label = "❌ 从自选股移除" if _is_in_wl else "⭐ 加入自选股"
+        if st.button(_wl_label, use_container_width=True, key="wl_toggle"):
+            if _is_in_wl:
+                _watchlist.remove(selected_ticker)
+            else:
+                _watchlist.append(selected_ticker)
+            update_pref("watchlist", _watchlist)
+            st.rerun()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
     analyst_options = {"市场分析师": AnalystType.MARKET, "舆情分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
-    selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=list(analyst_options.keys()))
+
+    # Stage 7: 分析模板（一键应用预置参数）
+    _tmpl_names = list(ANALYSIS_TEMPLATES.keys())
+    _tmpl_name = st.selectbox(
+        "🎨 应用模板（可选）",
+        options=["—— 自定义 ——"] + _tmpl_names,
+        index=0,
+        help="选模板后会自动填充下面的分析师 / 研究深度 / 回溯窗口。",
+    )
+    _tmpl_data = ANALYSIS_TEMPLATES.get(_tmpl_name) if _tmpl_name != "—— 自定义 ——" else None
+    if _tmpl_data:
+        st.caption(f"📋 {_tmpl_data['description']}")
+
+    _default_analysts = _tmpl_data["analysts"] if _tmpl_data else list(analyst_options.keys())
+    selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=_default_analysts)
     selected_analysts = [analyst_options[name] for name in selected_analyst_names]
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
-    selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=2)
+    _depth_default_idx = 2
+    if _tmpl_data:
+        _depth_default_idx = _tmpl_data["depth"]
+    selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=_depth_default_idx)
     selected_research_depth = depth_options[selected_depth_name]
 
-    # 【新增】回溯天数选择
-    saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+    # 【新增】回溯天数选择（模板会覆盖默认值）
+    _saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+    _lb_default = _tmpl_data["lookback_days"] if _tmpl_data else _saved_lookback
     selected_lookback_days = st.slider(
-        "分析回溯窗口 (天):", 
-        min_value=5, 
-        max_value=120, 
-        value=saved_lookback,
+        "分析回溯窗口 (天):",
+        min_value=5,
+        max_value=120,
+        value=_lb_default,
         help="设定 AI 分析技术指标和价格走势时向回搜索的时间范围（自然日）。"
     )
-    if selected_lookback_days != saved_lookback:
+    if not _tmpl_data and selected_lookback_days != _saved_lookback:
         update_pref("lookback_days", selected_lookback_days)
-    
+
     # 【新增】新闻/情绪回溯天数选择
-    saved_news_lookback = st.session_state.ui_prefs.get("news_lookback_days", 7)
+    _saved_news_lb = st.session_state.ui_prefs.get("news_lookback_days", 7)
+    _nlb_default = _tmpl_data["news_lookback_days"] if _tmpl_data else _saved_news_lb
     selected_news_lookback_days = st.slider(
-        "新闻/情绪分析窗口 (天):", 
-        min_value=1, 
-        max_value=30, 
-        value=saved_news_lookback,
+        "新闻/情绪分析窗口 (天):",
+        min_value=1,
+        max_value=30,
+        value=_nlb_default,
         help="设定 AI 分析新闻和社交媒体情绪时向回搜索的时间范围（自然日）。"
     )
-    if selected_news_lookback_days != saved_news_lookback:
+    if not _tmpl_data and selected_news_lookback_days != _saved_news_lb:
         update_pref("news_lookback_days", selected_news_lookback_days)
     
     # 存储位置 / LLM 提供商 / API Key / 模型 已迁移至顶部 "⚙️ 配置" tab
