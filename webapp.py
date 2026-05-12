@@ -214,6 +214,15 @@ if not RESULTS_DIR.exists():
 # --- 初始化 Session State ---
 if 'agent_status' not in st.session_state: st.session_state.agent_status = {}
 if 'agent_reports' not in st.session_state: st.session_state.agent_reports = {}
+# Stage 6: token / 工具调用统计
+if 'token_stats' not in st.session_state:
+    st.session_state.token_stats = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_calls": 0,
+        "tool_calls": {},  # name -> count
+    }
 if 'messages' not in st.session_state: st.session_state.messages = []
 if 'final_state' not in st.session_state: st.session_state.final_state = None
 if 'previous_sender' not in st.session_state: st.session_state.previous_sender = None
@@ -413,6 +422,66 @@ def reset_state():
     st.session_state.start_analysis = False # 【新增】
     st.session_state.current_analysis_paths = None # 【新增】
     st.session_state.pdf_data = None # 【新增】
+    # Stage 6: 重置 token 统计
+    st.session_state.token_stats = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_calls": 0,
+        "tool_calls": {},
+    }
+
+
+# Stage 6 helper：从 chunk 累计 token / tool 调用
+def _accumulate_token_stats(chunk: dict):
+    """从 streaming chunk 的消息中提取 token usage，累计到 session_state.token_stats。"""
+    msgs = chunk.get("messages") or []
+    if not msgs:
+        return
+    stats = st.session_state.token_stats
+    for msg in msgs[-3:]:  # 只看最近的几条，避免重复累加（chunk 是增量）
+        usage = getattr(msg, "usage_metadata", None) or getattr(msg, "response_metadata", {})
+        if isinstance(usage, dict):
+            # langchain 的 usage_metadata 格式
+            it = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+            ot = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+            tt = usage.get("total_tokens") or (it + ot)
+            if tt:
+                # 因为 chunk 是累加流，简单办法：只取最近这次的最大值；用最近一次覆盖
+                stats["input_tokens"] = max(stats["input_tokens"], it)
+                stats["output_tokens"] = max(stats["output_tokens"], ot)
+                stats["total_tokens"] = max(stats["total_tokens"], tt)
+        # 工具调用计数
+        tc = getattr(msg, "tool_calls", None)
+        if tc:
+            for call in tc:
+                name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+                if name:
+                    stats["tool_calls"][name] = stats["tool_calls"].get(name, 0) + 1
+
+
+def _format_token_stats(stats: dict, model: str = "") -> dict:
+    """把 token_stats 转成展示用的字典；包含粗略成本估算。"""
+    # DeepSeek V4 估算价格（USD / 1M tokens）—— 用户实际价格请以 DeepSeek 官方为准
+    pricing = {
+        "deepseek-v4-flash": (0.50, 1.50),
+        "deepseek-v4-pro":   (1.00, 3.00),
+        "deepseek-chat":     (0.27, 1.10),
+        "deepseek-reasoner": (0.55, 2.19),
+        "gpt-4o":            (5.00, 15.00),
+        "gpt-4o-mini":       (0.15, 0.60),
+    }
+    in_price, out_price = pricing.get(model, (0.0, 0.0))
+    input_tokens = stats.get("input_tokens", 0)
+    output_tokens = stats.get("output_tokens", 0)
+    cost_usd = (input_tokens * in_price + output_tokens * out_price) / 1_000_000
+    return {
+        "输入 tokens": f"{input_tokens:,}",
+        "输出 tokens": f"{output_tokens:,}",
+        "总 tokens":   f"{stats.get('total_tokens', input_tokens + output_tokens):,}",
+        "估算成本":     f"${cost_usd:.4f}" if cost_usd > 0 else "—",
+        "工具调用":     sum(stats.get("tool_calls", {}).values()),
+    }
 
 # 【新增】加载历史记录的函数（Stage 3：cache_data 加速）
 @st.cache_data(ttl=120, show_spinner=False)
@@ -923,6 +992,9 @@ with tab_analyze:
                     if chunk.get("sentiment_report"): st.session_state.agent_status["舆情分析师"] = "completed"
                     if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
 
+                    # Stage 6: 累积 token 使用统计
+                    _accumulate_token_stats(chunk)
+
                     # 将每个 agent 的最新输出记到 session_state，供下方"点击展开"显示
                     for _agent_name, _extractor in AGENT_REPORT_EXTRACTORS.items():
                         _content = _extractor(chunk)
@@ -1084,6 +1156,39 @@ with tab_analyze:
         date_from_state = final_state.get('trade_date', 'N/A')
 
         st.success(f"✅ 分析完成: **{ticker_from_state}** ({date_from_state})")
+
+        # Stage 6: 透明度卡片 — token 用量 + 数据源 + 数据新鲜度
+        _ts = st.session_state.token_stats
+        _fs = _format_token_stats(_ts, model=deep_thinker or "")
+        with st.container(border=True):
+            st.markdown("### 🔍 本次分析透明度")
+            _m_cols = st.columns(5)
+            _m_cols[0].metric("输入 tokens", _fs["输入 tokens"])
+            _m_cols[1].metric("输出 tokens", _fs["输出 tokens"])
+            _m_cols[2].metric("总 tokens", _fs["总 tokens"])
+            _m_cols[3].metric("估算成本 (USD)", _fs["估算成本"])
+            _m_cols[4].metric("工具调用次数", _fs["工具调用"])
+
+            # 数据源溯源
+            if _ts.get("tool_calls"):
+                _tc_md = " · ".join(
+                    f"`{n}`×{c}" for n, c in sorted(_ts["tool_calls"].items(), key=lambda x: -x[1])
+                )
+                st.caption(f"📡 数据源调用：{_tc_md}")
+
+            # 数据新鲜度（基于 trade_date 与今日的差距）
+            try:
+                _trade_dt = datetime.date.fromisoformat(date_from_state)
+                _delta = (datetime.date.today() - _trade_dt).days
+                if _delta == 0:
+                    st.caption("📅 数据新鲜度：**当日实时**")
+                elif _delta <= 3:
+                    st.caption(f"📅 数据新鲜度：{_delta} 天前 · 近期数据")
+                else:
+                    st.caption(f"📅 数据新鲜度：{_delta} 天前 · 历史回顾")
+            except Exception:
+                pass
+
         st.markdown("---")
 
         button_text = "🙈 隐藏实时分析过程回顾" if st.session_state.show_live_report_view else "👀 显示实时分析过程回顾"
