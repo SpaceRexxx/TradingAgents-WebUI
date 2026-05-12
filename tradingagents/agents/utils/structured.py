@@ -62,7 +62,18 @@ def invoke_structured_or_freetext(
     if structured_llm is not None:
         try:
             result = structured_llm.invoke(prompt)
-            return render(result)
+            if result is None:
+                # Some providers (notably DeepSeek) silently return None when
+                # the model fails to emit a tool-call; treat as failure so we
+                # fall through to free-text instead of raising AttributeError
+                # inside render() and confusing the log.
+                logger.warning(
+                    "%s: structured-output returned None (model emitted no "
+                    "tool-call); retrying once as free text",
+                    agent_name,
+                )
+            else:
+                return render(result)
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying once as free text",

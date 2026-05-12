@@ -100,14 +100,14 @@ st.title("📈 TradingAgents: 智能交易分析框架")
 
 # --- 定义团队结构 ---
 TEAMS_STRUCTURE = {
-    "分析师团队": ["市场分析师", "社交媒体分析师", "新闻分析师", "基本面分析师"],
+    "分析师团队": ["市场分析师", "舆情分析师", "新闻分析师", "基本面分析师"],
     "研究团队": ["多头研究员", "空头研究员", "研究经理"],
     "交易团队": ["交易员"],
     "风险管理团队": ["激进型分析师", "保守型分析师", "中立型分析师", "投资组合经理"],
 }
 SENDER_MAP = {
     "Market Analyst": "市场分析师", "News Analyst": "新闻分析师",
-    "Social Analyst": "社交媒体分析师", "Fundamentals Analyst": "基本面分析师",
+    "Social Analyst": "舆情分析师", "Fundamentals Analyst": "基本面分析师",
     "Bull Researcher": "多头研究员", "Bear Researcher": "空头研究员",
     "Research Manager": "研究经理", "Trader": "交易员",
     "Risky Analyst": "激进型分析师", "Safe Analyst": "保守型分析师",
@@ -132,11 +132,28 @@ if not RESULTS_DIR.exists():
 
 # --- 初始化 Session State ---
 if 'agent_status' not in st.session_state: st.session_state.agent_status = {}
+if 'agent_reports' not in st.session_state: st.session_state.agent_reports = {}
 if 'messages' not in st.session_state: st.session_state.messages = []
 if 'final_state' not in st.session_state: st.session_state.final_state = None
 if 'previous_sender' not in st.session_state: st.session_state.previous_sender = None
 if 'show_live_report_view' not in st.session_state: st.session_state.show_live_report_view = False
 if 'start_analysis' not in st.session_state: st.session_state.start_analysis = False # 【修改】确保存在
+
+# 从 chunk 中提取每个 agent 的输出报告，用于"点击展开查看"
+AGENT_REPORT_EXTRACTORS = {
+    "市场分析师":       lambda c: c.get("market_report"),
+    "舆情分析师":       lambda c: c.get("sentiment_report"),
+    "新闻分析师":       lambda c: c.get("news_report"),
+    "基本面分析师":     lambda c: c.get("fundamentals_report"),
+    "多头研究员":       lambda c: (c.get("investment_debate_state") or {}).get("bull_history"),
+    "空头研究员":       lambda c: (c.get("investment_debate_state") or {}).get("bear_history"),
+    "研究经理":         lambda c: c.get("investment_plan"),
+    "交易员":           lambda c: c.get("trader_investment_plan"),
+    "激进型分析师":     lambda c: (c.get("risk_debate_state") or {}).get("aggressive_history"),
+    "保守型分析师":     lambda c: (c.get("risk_debate_state") or {}).get("conservative_history"),
+    "中立型分析师":     lambda c: (c.get("risk_debate_state") or {}).get("neutral_history"),
+    "投资组合经理":     lambda c: c.get("final_trade_decision"),
+}
 if 'current_analysis_paths' not in st.session_state: st.session_state.current_analysis_paths = None # 【新增】
 if 'pdf_data' not in st.session_state: st.session_state.pdf_data = None # 【新增】缓存 PDF 字节流
 
@@ -146,6 +163,7 @@ def reset_state():
     """重置整个应用的会话状态，用于开始新的分析"""
     status_dict = {agent: "pending" for team in TEAMS_STRUCTURE.values() for agent in team}
     st.session_state.agent_status = status_dict
+    st.session_state.agent_reports = {}
     st.session_state.messages = []
     st.session_state.final_state = None
     st.session_state.previous_sender = None
@@ -350,7 +368,7 @@ with st.sidebar:
     st.header("分析配置")
     selected_ticker = st.text_input("请输入股票代码:", value="").upper()
     analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
-    analyst_options = {"市场分析师": AnalystType.MARKET, "社交媒体分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
+    analyst_options = {"市场分析师": AnalystType.MARKET, "舆情分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
     selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=list(analyst_options.keys()))
     selected_analysts = [analyst_options[name] for name in selected_analyst_names]
     depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
@@ -471,18 +489,27 @@ with st.sidebar:
     backend_url = provider_options[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
-    SHALLOW_AGENT_OPTIONS = { 
-        "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], 
+    SHALLOW_AGENT_OPTIONS = {
+        "deepseek": [
+            ("DeepSeek V4 Flash - 最新快速模型", "deepseek-v4-flash"),
+            ("DeepSeek V3.2 通用", "deepseek-chat"),
+            ("DeepSeek V3.2 深度思考", "deepseek-reasoner"),
+        ],
         "nvidia": [("NVIDIA-DeepSeek-V3", "deepseek-ai/deepseek-v3.2")],
         "火山引擎 (volcengine)": [("Seed-2.0", "ep-20260315170816-rdcb9")],
-        "openai": [("GPT-4o mini - 快速高效", "gpt-4o-mini"), ("GPT-4o - 标准模型", "gpt-4o")], 
-        "google": [("Gemini 1.5 Flash - 高性价比", "gemini-1.5-flash-latest")] 
+        "openai": [("GPT-4o mini - 快速高效", "gpt-4o-mini"), ("GPT-4o - 标准模型", "gpt-4o")],
+        "google": [("Gemini 1.5 Flash - 高性价比", "gemini-1.5-flash-latest")]
     }
-    DEEP_AGENT_OPTIONS = { 
-        "deepseek": [("DeepSeek-通用", "deepseek-chat"), ("DeepSeek-深度思考", "deepseek-reasoner")], 
+    DEEP_AGENT_OPTIONS = {
+        "deepseek": [
+            ("DeepSeek V4 Pro - 最新旗舰模型", "deepseek-v4-pro"),
+            ("DeepSeek V4 Flash - 最新快速模型", "deepseek-v4-flash"),
+            ("DeepSeek V3.2 通用", "deepseek-chat"),
+            ("DeepSeek V3.2 深度思考", "deepseek-reasoner"),
+        ],
         "nvidia": [("NVIDIA-DeepSeek-V3 (Thinking)", "deepseek-ai/deepseek-v3.2")],
         "火山引擎 (volcengine)": [("Seed-2.0 (Thinking)", "ep-20260315170816-rdcb9")],
-        "openai": [("GPT-4o - 旗舰模型", "gpt-4o"), ("GPT-4 Turbo - 高性能", "gpt-4-turbo")], 
+        "openai": [("GPT-4o - 旗舰模型", "gpt-4o"), ("GPT-4 Turbo - 高性能", "gpt-4-turbo")],
         "google": [("Gemini 1.5 Pro - 先进推理", "gemini-1.5-pro-latest")]
     }
     provider_key = selected_llm_provider_name.lower()
@@ -595,11 +622,15 @@ if st.session_state.start_analysis and not st.session_state.final_state:
         
         with st.spinner("正在初始化分析图..."):
             graph = TradingAgentsGraph([a.value for a in selected_analysts], config=config, debug=True)
+            # 显式使用关键字参数，避免和 upstream 新增的 past_context
+            # 位置参数串位（曾导致 lookback 设置失效）。past_context 由
+            # TradingMemoryLog 在运行时填充，这里不需要预先传入。
             init_agent_state = graph.propagator.create_initial_state(
-                selected_ticker, 
-                analysis_date, 
-                selected_lookback_days,
-                selected_news_lookback_days
+                selected_ticker,
+                analysis_date,
+                past_context=graph.memory_log.get_past_context(selected_ticker),
+                lookback_days=selected_lookback_days,
+                news_lookback_days=selected_news_lookback_days,
             )
             args = graph.propagator.get_graph_args()
             
@@ -626,8 +657,14 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                 # 【并发补单】当流中出现 report 时，代表对应分析师已跑完并发 SubGraph
                 if chunk.get("market_report"): st.session_state.agent_status["市场分析师"] = "completed"
                 if chunk.get("news_report"): st.session_state.agent_status["新闻分析师"] = "completed"
-                if chunk.get("sentiment_report"): st.session_state.agent_status["社交媒体分析师"] = "completed"
+                if chunk.get("sentiment_report"): st.session_state.agent_status["舆情分析师"] = "completed"
                 if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
+
+                # 将每个 agent 的最新输出记到 session_state，供下方"点击展开"显示
+                for _agent_name, _extractor in AGENT_REPORT_EXTRACTORS.items():
+                    _content = _extractor(chunk)
+                    if _content:
+                        st.session_state.agent_reports[_agent_name] = _content
                 
                 # 优化调试信息：仅保留关键诊断状态，防止屏幕被海量脱敏数据占满
                 st.session_state.last_chunk_raw = {
@@ -648,14 +685,50 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                         if st.session_state.previous_sender: st.session_state.agent_status[st.session_state.previous_sender] = "completed"
                         st.session_state.agent_status[current_sender_name] = "in_progress"
                         st.session_state.previous_sender = current_sender_name
-                    status_md = "| 团队 | 代理 | 状态 |\n| --- | --- | --- |\n"
+
+                    _status_label_map = {"pending": "待执行", "in_progress": "进行中", "completed": "已完成"}
+                    _status_icon_map = {"pending": "⚪", "in_progress": "⏳", "completed": "✅"}
+
+                    # 左列：紧凑状态总览（只显示状态，不展开内容；阅读区在右列 tabs 里）
                     for team, agents in TEAMS_STRUCTURE.items():
-                        team_name_tracker = team
+                        st.markdown(f"**🏷️ {team}**")
                         for agent in agents:
-                            if agent in selected_analyst_names or team != "分析师团队":
-                                status = st.session_state.agent_status.get(agent, "pending"); status_icon = "⚪" if status == "pending" else ("⏳" if status == "in_progress" else "✅")
-                                status_md += f"| {team_name_tracker} | **{agent}** | {status_icon} {status} |\n"; team_name_tracker = ""
-                    st.markdown(status_md)
+                            if not (agent in selected_analyst_names or team != "分析师团队"):
+                                continue
+                            status = st.session_state.agent_status.get(agent, "pending")
+                            icon = _status_icon_map.get(status, "⚪")
+                            label = _status_label_map.get(status, status)
+                            st.markdown(f"&emsp;{icon} {agent} · *{label}*")
+
+                # 右列：用 tabs 展示每个代理的输出（点击切换为客户端行为，不会触发 streamlit rerun）
+                with report_placeholder.container():
+                    st.subheader("代理输出（点击上方 Tab 切换）")
+
+                    # 按团队顺序排列 tab；只展示用户选中的分析师
+                    _visible_agents = []
+                    for _team, _agents in TEAMS_STRUCTURE.items():
+                        for _agent in _agents:
+                            if not (_agent in selected_analyst_names or _team != "分析师团队"):
+                                continue
+                            _visible_agents.append(_agent)
+
+                    if _visible_agents:
+                        # tab 标签保持固定文本（不带变动的图标），避免切换造成 Streamlit 重置选中状态。
+                        _tab_objs = st.tabs(_visible_agents)
+                        for _tab, _agent in zip(_tab_objs, _visible_agents):
+                            with _tab:
+                                _status = st.session_state.agent_status.get(_agent, "pending")
+                                _icon = _status_icon_map.get(_status, "⚪")
+                                _label = _status_label_map.get(_status, _status)
+                                st.caption(f"{_icon} 当前状态：**{_label}**")
+                                _report = st.session_state.agent_reports.get(_agent)
+                                if _report:
+                                    st.markdown(_report, unsafe_allow_html=True)
+                                else:
+                                    if _status == "in_progress":
+                                        st.info(f"⏳ {_agent} 正在执行中，预计很快有内容...")
+                                    else:
+                                        st.info(f"⏸️ {_agent} 尚未开始执行")
                     
                 with messages_placeholder.container():
                     st.subheader("消息与工具日志");
@@ -666,8 +739,8 @@ if st.session_state.start_analysis and not st.session_state.final_state:
                             for tc in last_message.tool_calls: st.session_state.messages.append(f"**🛠️ 工具调用:** `{tc.get('name', 'N/A')}`")
                     st.markdown("\n\n".join(st.session_state.messages[-10:]))
                     
-                with report_placeholder.container():
-                    display_live_report(chunk)
+                # 右列已在 status_placeholder 内通过 st.tabs 展示每个代理的输出，
+                # 这里不再调用 display_live_report，避免与左列重复渲染同一份内容。
                 
                 with live_debug_placeholder.container():
                     with st.expander("🛠️ 调试监控器 (精简版)", expanded=True):

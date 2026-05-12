@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -26,6 +27,24 @@ logger = logging.getLogger(__name__)
 _API = "https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json"
 _UA = "tradingagents/0.2 (+https://github.com/TauricResearch/TradingAgents)"
 
+# Tickers that StockTwits does not index. The platform is US-focused and
+# does not carry Chinese A-shares, Hong Kong listings (mostly), or other
+# exchange-qualified instruments. We detect these patterns and skip the
+# HTTP round-trip entirely instead of always 404-ing.
+_NON_US_TICKER = re.compile(
+    r"^"
+    r"(?:\d+\.(?:SS|SZ|HK))"     # 600036.SS, 000001.SZ, 0700.HK
+    r"|(?:SH|SZ)\d+"             # SH600036, SZ000001 (legacy formats)
+    r"|^\d{6}$"                   # 6-digit bare A-share code
+    r"$",
+    re.IGNORECASE,
+)
+
+
+def _is_us_ticker(ticker: str) -> bool:
+    """Return True iff ``ticker`` looks like a US-listed symbol StockTwits indexes."""
+    return not _NON_US_TICKER.match(ticker.strip())
+
 
 def fetch_stocktwits_messages(ticker: str, limit: int = 30, timeout: float = 10.0) -> str:
     """Fetch recent StockTwits messages for ``ticker`` and return them as a
@@ -35,13 +54,22 @@ def fetch_stocktwits_messages(ticker: str, limit: int = 30, timeout: float = 10.
     symbol has no messages, or the response shape is unexpected — the
     caller never has to special-case None or exceptions.
     """
+    if not _is_us_ticker(ticker):
+        # StockTwits has no coverage for A-shares / HK / other non-US listings.
+        return (
+            f"<StockTwits 不索引非美股标的（{ticker.upper()}）。"
+            f"对于 A 股 / 港股请主要参考新闻与本地论坛数据。>"
+        )
+
     url = _API.format(ticker=ticker.upper())
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
     except (HTTPError, URLError, json.JSONDecodeError, TimeoutError) as exc:
-        logger.warning("StockTwits fetch failed for %s: %s", ticker, exc)
+        # 404 is common when a US ticker isn't on StockTwits (e.g. small caps
+        # or recently delisted); keep this at debug to avoid polluting logs.
+        logger.debug("StockTwits fetch failed for %s: %s", ticker, exc)
         return f"<stocktwits unavailable: {type(exc).__name__}>"
 
     messages = data.get("messages", []) if isinstance(data, dict) else []

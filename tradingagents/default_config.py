@@ -76,6 +76,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "news_article_limit": 20,             # max articles per ticker (ticker-news)
     "global_news_article_limit": 10,      # max articles for global/macro news
     "global_news_lookback_days": 7,       # macro news lookback window
+    # Reddit fetching uses OpenCLI (https://github.com/jackwener/OpenCLI) to
+    # drive the user's logged-in Chrome session, bypassing Reddit's WAF.
+    # Requires: opencli on PATH + Browser Bridge Chrome extension + Chrome
+    # logged into reddit.com. Set False to skip Reddit entirely.
+    # Reddit only fires for US/HK tickers; A-share tickers are routed to
+    # Xueqiu (via OpenCLI) and Eastmoney 千股千评 (via akshare) instead.
+    "reddit_enabled": True,
     # Search queries used by get_global_news for macro headlines. Extend or
     # replace to broaden geographic / sector coverage.
     "global_news_queries": [
