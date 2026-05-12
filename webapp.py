@@ -96,7 +96,87 @@ _st_components.html("""
 </script>
 """, height=0)
 
-st.title("📈 TradingAgents: 智能交易分析框架")
+# --- 全局 CSS 视觉系统（Stage 4）---
+st.markdown(
+    """
+    <style>
+    /* 顶部 tabs：更突出 */
+    div[data-testid="stTabs"] button[role="tab"] {
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        background-color: rgba(34, 197, 94, 0.08) !important;
+        border-bottom: 3px solid #22c55e !important;
+        color: #22c55e !important;
+    }
+
+    /* Container 边框：更柔和的圆角 + 微微阴影 */
+    div[data-testid="stContainer"][class*="border"] {
+        border-radius: 10px !important;
+    }
+
+    /* st.info / warning / error 卡片：左侧色条更明显 */
+    div[data-testid="stAlert"] {
+        border-left-width: 4px !important;
+        border-radius: 8px !important;
+    }
+
+    /* 主标题更紧凑（默认间距太大）*/
+    h1 {
+        padding-top: 0 !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* 让 sidebar 略窄一些，给主区域留更多空间 */
+    section[data-testid="stSidebar"] {
+        min-width: 280px !important;
+        max-width: 320px !important;
+    }
+
+    /* expander 标题更醒目 */
+    summary {
+        font-weight: 600 !important;
+    }
+
+    /* button：默认主操作按钮高亮成品牌绿 */
+    button[kind="primary"], button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+        border: none !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+    }
+
+    /* 表格：紧凑 + 边框柔和 */
+    table {
+        border-radius: 8px !important;
+        overflow: hidden !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 主标题 + 副标题
+_t_col1, _t_col2 = st.columns([5, 2])
+with _t_col1:
+    st.title("📈 TradingAgents")
+    st.caption("多代理智能交易分析框架 · v2 · A 股 / 美股 / 港股")
+with _t_col2:
+    st.write("")
+    st.write("")
+    # 简短状态指示器（实时显示当前 provider + model）
+    try:
+        _hdr_provider = st.session_state.ui_prefs.get("provider", "DeepSeek")
+        _hdr_deep = st.session_state.ui_prefs.get(f"{_hdr_provider.lower()}_deep") or "未选"
+        st.caption(f"🔌 {_hdr_provider}  ·  🧠 {_hdr_deep}")
+    except Exception:
+        pass
 
 # --- 定义团队结构 ---
 TEAMS_STRUCTURE = {
@@ -692,8 +772,8 @@ with st.sidebar:
     has_position = "已持有" if "是" in position_status_option else "未持有"
     st.markdown("---")
     
-    # 【修改】“开始分析”前进行前置校验
-    if st.button("🚀 开始分析", use_container_width=True):
+    # 【修改】"开始分析" 前进行前置校验
+    if st.button("🚀 开始分析", use_container_width=True, type="primary"):
         # 获取当前提供商对应的环境变量名
         target_env_var = env_key_map.get(selected_llm_provider_name.lower())
         # 校验：输入框有填 OR 环境变量里有
@@ -1071,9 +1151,50 @@ with tab_analyze:
         else:
             download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
-    # 3. 初始欢迎屏幕
+    # 3. 初始欢迎屏幕（Stage 4：友好引导 + 最近 6 次分析 quick-access）
     else:
-        st.info("请在左侧侧边栏配置您的分析参数，然后点击 **“开始分析”**。")
+        with st.container(border=True):
+            st.markdown("### 👋 欢迎使用 TradingAgents")
+            st.markdown(
+                "本框架编排 **12 个 AI 代理**（4 分析师 + 3 研究 + 1 交易员 + 4 风险）"
+                "在虚拟会议室里就一个标的进行**辩论 + 投票 + 最终决策**。"
+            )
+            st.markdown(
+                "**🚀 三步开始：**\n\n"
+                "1. 在左侧侧边栏输入 **股票代码**（例如 `NVDA`、`300990.SZ`、`0700.HK`）\n"
+                "2. 选择 **分析师团队**、**研究深度**、**回溯窗口** 和 **是否持有仓位**\n"
+                "3. 点击 **🚀 开始分析** 按钮，然后回到这个 tab 看实时进展"
+            )
+            st.markdown(
+                "**🆘 第一次使用？** 先去 **🏥 诊断** tab 看看依赖是否都就绪；"
+                "再去 **⚙️ 配置** tab 选好 LLM 提供商和模型。"
+            )
+
+        # 最近 6 次分析快捷入口
+        _recent = load_historical_analyses_cached(str(RESULTS_DIR))
+        if _recent:
+            st.markdown("---")
+            st.markdown("### 📚 最近的分析（点击直接打开）")
+            _flat = []
+            for _t, _runs in _recent.items():
+                for _r in _runs[:3]:  # 每个 ticker 最近 3 次
+                    _flat.append({"ticker": _t, **_r})
+            _flat.sort(key=lambda x: x["date"], reverse=True)
+            _flat = _flat[:6]
+
+            _cols = st.columns(3)
+            for _i, _item in enumerate(_flat):
+                with _cols[_i % 3]:
+                    with st.container(border=True):
+                        st.markdown(f"**{_item['ticker']}**")
+                        st.caption(f"📅 {_item['date']}")
+                        st.button(
+                            "📂 查看报告",
+                            key=f"recent_{_item['ticker']}_{_item['date']}",
+                            on_click=load_selected_analysis,
+                            args=(_item['json_path'],),
+                            use_container_width=True,
+                        )
 
 
 # ---- 📚 历史分析 ----
