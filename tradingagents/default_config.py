@@ -63,9 +63,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": False,
-    # Output language for analyst reports and final decision
-    # Internal agent debate stays in English for reasoning quality
-    "output_language": "English",
+    # Output language for analyst reports and final decision.
+    # 默认中文：WebUI 整体面向中文用户，且部分模型（如小米 MiMo、火山引擎）会严格
+    # 按结构化字段的英文描述输出英文；显式声明语言可保证 Research Manager / Trader
+    # 阶段也始终生成中文。
+    "output_language": "Chinese",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,

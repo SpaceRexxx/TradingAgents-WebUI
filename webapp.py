@@ -338,6 +338,7 @@ PROVIDER_OPTIONS = {
     "DeepSeek": "https://api.deepseek.com/v1",
     "NVIDIA": "https://integrate.api.nvidia.com/v1",
     "火山引擎 (Volcengine)": "https://ark.cn-beijing.volces.com/api/v3",
+    "小米 MiMo (mimo)": "https://token-plan-cn.xiaomimimo.com/v1",
     "OpenAI": "https://api.openai.com/v1",
     "Google": "https://generativelen/v1",
 }
@@ -345,17 +346,18 @@ PROVIDER_ENV_KEY_MAP = {
     "deepseek": "DEEPSEEK_API_KEY",
     "nvidia": "NVIDIA_API_KEY",
     "火山引擎 (volcengine)": "ARK_API_KEY",
+    "小米 mimo (mimo)": "MIMO_API_KEY",
     "openai": "OPENAI_API_KEY",
     "google": "GOOGLE_API_KEY",
 }
 SHALLOW_AGENT_OPTIONS = {
     "deepseek": [
         ("DeepSeek V4 Flash - 最新快速模型", "deepseek-v4-flash"),
-        ("DeepSeek V3.2 通用", "deepseek-chat"),
-        ("DeepSeek V3.2 深度思考", "deepseek-reasoner"),
+        ("DeepSeek V4 Pro - 最新旗舰模型", "deepseek-v4-pro"),
     ],
     "nvidia": [("NVIDIA-DeepSeek-V3", "deepseek-ai/deepseek-v3.2")],
     "火山引擎 (volcengine)": [("Seed-2.0", "ep-20260315170816-rdcb9")],
+    "小米 mimo (mimo)": [("MiMo v2.5 Pro", "mimo-v2.5-pro")],
     "openai": [("GPT-4o mini - 快速高效", "gpt-4o-mini"), ("GPT-4o - 标准模型", "gpt-4o")],
     "google": [("Gemini 1.5 Flash - 高性价比", "gemini-1.5-flash-latest")],
 }
@@ -363,11 +365,10 @@ DEEP_AGENT_OPTIONS = {
     "deepseek": [
         ("DeepSeek V4 Pro - 最新旗舰模型", "deepseek-v4-pro"),
         ("DeepSeek V4 Flash - 最新快速模型", "deepseek-v4-flash"),
-        ("DeepSeek V3.2 通用", "deepseek-chat"),
-        ("DeepSeek V3.2 深度思考", "deepseek-reasoner"),
     ],
     "nvidia": [("NVIDIA-DeepSeek-V3 (Thinking)", "deepseek-ai/deepseek-v3.2")],
     "火山引擎 (volcengine)": [("Seed-2.0 (Thinking)", "ep-20260315170816-rdcb9")],
+    "小米 mimo (mimo)": [("MiMo v2.5 Pro", "mimo-v2.5-pro")],
     "openai": [("GPT-4o - 旗舰模型", "gpt-4o"), ("GPT-4 Turbo - 高性能", "gpt-4-turbo")],
     "google": [("Gemini 1.5 Pro - 先进推理", "gemini-1.5-pro-latest")],
 }
@@ -529,6 +530,53 @@ def _accumulate_token_stats(chunk: dict):
                     stats["tool_calls"][name] = stats["tool_calls"].get(name, 0) + 1
 
 
+_CUMULATIVE_STATS_FILENAME = "cumulative_stats.json"
+
+
+def _cumulative_stats_path(results_dir) -> Path:
+    return Path(results_dir) / _CUMULATIVE_STATS_FILENAME
+
+
+def _load_cumulative_stats(results_dir) -> dict:
+    """读取所有历史分析累计的 token / 成本 / 工具调用统计；缺失时返回零值。"""
+    p = _cumulative_stats_path(results_dir)
+    if not p.exists():
+        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+                "cost_usd": 0.0, "tool_calls": 0, "runs": 0}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # 缺字段时回填零，保证旧文件向后兼容
+        for k, default in (("input_tokens", 0), ("output_tokens", 0), ("total_tokens", 0),
+                           ("cost_usd", 0.0), ("tool_calls", 0), ("runs", 0)):
+            data.setdefault(k, default)
+        return data
+    except Exception:
+        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+                "cost_usd": 0.0, "tool_calls": 0, "runs": 0}
+
+
+def _accumulate_to_cumulative(results_dir, run_stats: dict, run_cost_usd: float, run_id: str) -> None:
+    """把单次分析的 stats 追加到累计文件；通过 session_state 的 run_id 去重，避免 rerun 时重复累加。"""
+    accumulated_key = "_cumulative_accumulated_run_id"
+    if st.session_state.get(accumulated_key) == run_id:
+        return  # 同一次运行已经计过了
+    cum = _load_cumulative_stats(results_dir)
+    cum["input_tokens"]  += int(run_stats.get("input_tokens", 0) or 0)
+    cum["output_tokens"] += int(run_stats.get("output_tokens", 0) or 0)
+    cum["total_tokens"]  += int(run_stats.get("total_tokens", 0) or 0)
+    cum["cost_usd"]      += float(run_cost_usd or 0.0)
+    cum["tool_calls"]    += int(sum((run_stats.get("tool_calls") or {}).values()))
+    cum["runs"]          += 1
+    try:
+        _cumulative_stats_path(results_dir).parent.mkdir(parents=True, exist_ok=True)
+        with open(_cumulative_stats_path(results_dir), "w", encoding="utf-8") as f:
+            json.dump(cum, f, ensure_ascii=False, indent=2)
+        st.session_state[accumulated_key] = run_id
+    except Exception:
+        pass
+
+
 def _format_token_stats(stats: dict, model: str = "") -> dict:
     """把 token_stats 转成展示用的字典；包含粗略成本估算。"""
     # DeepSeek V4 估算价格（USD / 1M tokens）—— 用户实际价格请以 DeepSeek 官方为准
@@ -550,6 +598,7 @@ def _format_token_stats(stats: dict, model: str = "") -> dict:
         "总 tokens":   f"{stats.get('total_tokens', input_tokens + output_tokens):,}",
         "估算成本":     f"${cost_usd:.4f}" if cost_usd > 0 else "—",
         "工具调用":     sum(stats.get("tool_calls", {}).values()),
+        "_cost_usd_raw": cost_usd,
     }
 
 # 【新增】加载历史记录的函数（Stage 3：cache_data 加速）
@@ -668,9 +717,9 @@ def display_live_report(state_chunk):
         st.subheader("第四/五阶段：风险管理与最终决策")
         risk_state = state_chunk["risk_debate_state"]
         r_col1, r_col2, r_col3 = st.columns(3)
-        with r_col1: st.error("**激进派观点**"); st.markdown(risk_state.get("risky_history", ""))
+        with r_col1: st.error("**激进派观点**"); st.markdown(risk_state.get("aggressive_history", ""))
         with r_col2: st.info("**中立派观点**"); st.markdown(risk_state.get("neutral_history", ""))
-        with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("safe_history", ""))
+        with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("conservative_history", ""))
         if risk_state.get("judge_decision"): st.success("**最终决策 (投资组合经理):**"); st.markdown(risk_state["judge_decision"])
     elif "trader_investment_plan" in state_chunk and state_chunk["trader_investment_plan"]:
         st.subheader("第三阶段：交易团队计划"); st.markdown(state_chunk["trader_investment_plan"])
@@ -720,9 +769,9 @@ def display_full_process_review(final_state):
     if "risk_debate_state" in final_state and final_state["risk_debate_state"].get("history"):
         risk_state = final_state["risk_debate_state"]
         r_col1, r_col2, r_col3 = st.columns(3)
-        with r_col1: st.error("**激进派观点**"); st.markdown(risk_state.get("risky_history", ""), unsafe_allow_html=True)
+        with r_col1: st.error("**激进派观点**"); st.markdown(risk_state.get("aggressive_history", ""), unsafe_allow_html=True)
         with r_col2: st.info("**中立派观点**"); st.markdown(risk_state.get("neutral_history", ""), unsafe_allow_html=True)
-        with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("safe_history", ""), unsafe_allow_html=True)
+        with r_col3: st.warning("**保守派观点**"); st.markdown(risk_state.get("conservative_history", ""), unsafe_allow_html=True)
         if risk_state.get("judge_decision"): st.success("**最终决策 (投资组合经理):**"); st.markdown(risk_state["judge_decision"], unsafe_allow_html=True)
 
 # ----- PDF 生成方案 (Playwright 同步版) -----
@@ -1085,9 +1134,8 @@ with tab_analyze:
     # 1. 分析进行中的视图
     if st.session_state.start_analysis and not st.session_state.final_state:
         progress_placeholder = st.empty()
-        col1, col2 = st.columns([1, 2])
-        with col1: status_placeholder = st.empty(); messages_placeholder = st.empty()
-        with col2: report_placeholder = st.empty()
+        report_placeholder = st.empty()
+        messages_placeholder = st.empty()
 
         if not selected_analysts:
             show_error_with_fix(
@@ -1189,29 +1237,17 @@ with tab_analyze:
                         max_turns = 3 * config["max_risk_discuss_rounds"] # 3个 agent
                         st.toast(f"风险管理辩论进行中: 第 {count} / {max_turns} 次发言")
 
-                    with status_placeholder.container():
-                        st.subheader("代理状态")
-                        current_sender_name = SENDER_MAP.get(chunk.get("sender"))
-                        if current_sender_name and current_sender_name != st.session_state.previous_sender:
-                            if st.session_state.previous_sender: st.session_state.agent_status[st.session_state.previous_sender] = "completed"
-                            st.session_state.agent_status[current_sender_name] = "in_progress"
-                            st.session_state.previous_sender = current_sender_name
+                    # 更新当前发言代理的状态（状态直接体现在下方 tab 标签上）
+                    current_sender_name = SENDER_MAP.get(chunk.get("sender"))
+                    if current_sender_name and current_sender_name != st.session_state.previous_sender:
+                        if st.session_state.previous_sender: st.session_state.agent_status[st.session_state.previous_sender] = "completed"
+                        st.session_state.agent_status[current_sender_name] = "in_progress"
+                        st.session_state.previous_sender = current_sender_name
 
-                        _status_label_map = {"pending": "待执行", "in_progress": "进行中", "completed": "已完成"}
-                        _status_icon_map = {"pending": "⚪", "in_progress": "⏳", "completed": "✅"}
+                    _status_label_map = {"pending": "待执行", "in_progress": "进行中", "completed": "已完成"}
+                    _status_icon_map = {"pending": "⚪", "in_progress": "⏳", "completed": "✅"}
 
-                        # 左列：紧凑状态总览（只显示状态，不展开内容；阅读区在右列 tabs 里）
-                        for team, agents in TEAMS_STRUCTURE.items():
-                            st.markdown(f"**🏷️ {team}**")
-                            for agent in agents:
-                                if not (agent in selected_analyst_names or team != "分析师团队"):
-                                    continue
-                                status = st.session_state.agent_status.get(agent, "pending")
-                                icon = _status_icon_map.get(status, "⚪")
-                                label = _status_label_map.get(status, status)
-                                st.markdown(f"&emsp;{icon} {agent} · *{label}*")
-
-                    # 右列：用 tabs 展示每个代理的输出（点击切换为客户端行为，不会触发 streamlit rerun）
+                    # 用 tabs 展示每个代理的输出（点击切换为客户端行为，不会触发 streamlit rerun）
                     with report_placeholder.container():
                         st.subheader("代理输出（点击上方 Tab 切换）")
 
@@ -1224,8 +1260,12 @@ with tab_analyze:
                                 _visible_agents.append(_agent)
 
                         if _visible_agents:
-                            # tab 标签保持固定文本（不带变动的图标），避免切换造成 Streamlit 重置选中状态。
-                            _tab_objs = st.tabs(_visible_agents)
+                            # 在 tab 标签上直接展示状态图标，方便一眼看到每个代理的进度。
+                            _tab_labels = [
+                                f"{_status_icon_map.get(st.session_state.agent_status.get(_a, 'pending'), '⚪')} {_a}"
+                                for _a in _visible_agents
+                            ]
+                            _tab_objs = st.tabs(_tab_labels)
                             for _tab, _agent in zip(_tab_objs, _visible_agents):
                                 with _tab:
                                     _status = st.session_state.agent_status.get(_agent, "pending")
@@ -1344,6 +1384,12 @@ with tab_analyze:
             _m_cols[2].metric("总 tokens", _fs["总 tokens"])
             _m_cols[3].metric("估算成本 (USD)", _fs["估算成本"])
             _m_cols[4].metric("工具调用次数", _fs["工具调用"])
+
+            # 累计到持久化文件（用 ticker+date 作为 run_id 去重，避免 rerun 时重复累加）
+            _accumulate_to_cumulative(
+                RESULTS_DIR, _ts, _fs.get("_cost_usd_raw", 0.0),
+                run_id=f"{ticker_from_state}_{date_from_state}",
+            )
 
             # 数据源溯源
             if _ts.get("tool_calls"):
@@ -1534,6 +1580,20 @@ with tab_analyze:
 with tab_history:
     st.subheader("📚 历史分析记录")
     st.caption(f"当前存储目录：`{RESULTS_DIR}`")
+
+    # 累计统计总览（覆盖所有历史分析）
+    _cum = _load_cumulative_stats(RESULTS_DIR)
+    with st.container(border=True):
+        st.markdown("### 📊 累计统计（所有分析）")
+        _cum_cols = st.columns(5)
+        _cum_cols[0].metric("输入 tokens", f"{_cum['input_tokens']:,}")
+        _cum_cols[1].metric("输出 tokens", f"{_cum['output_tokens']:,}")
+        _cum_cols[2].metric("总 tokens",   f"{_cum['total_tokens']:,}")
+        _cum_cols[3].metric("估算成本 (USD)",
+                            f"${_cum['cost_usd']:.4f}" if _cum["cost_usd"] > 0 else "—")
+        _cum_cols[4].metric("工具调用次数", f"{_cum['tool_calls']:,}")
+        st.caption(f"📁 来源：{_cum['runs']} 次分析累计 · 数据存于 `{_CUMULATIVE_STATS_FILENAME}`")
+
     # 显式调用缓存版本；2 分钟 TTL 内多次切换 tab 不会重复扫盘
     historical_analyses = load_historical_analyses_cached(str(RESULTS_DIR))
 
@@ -1588,12 +1648,21 @@ with tab_history:
                     use_container_width=True,
                 )
         with _bcol2:
+            _rating_label_map = {
+                "全部": "全部",
+                "Buy": "买入",
+                "Overweight": "增持",
+                "Hold": "持有",
+                "Underweight": "减持",
+                "Sell": "卖出",
+            }
             _rating_filter = st.selectbox(
                 "📌 评级筛选",
-                options=["全部", "Buy", "Overweight", "Hold", "Underweight", "Sell"],
+                options=list(_rating_label_map.keys()),
                 index=0,
                 key="history_rating_filter",
                 label_visibility="collapsed",
+                format_func=lambda x: _rating_label_map[x],
             )
         with _bcol3:
             _view_mode = st.selectbox(

@@ -33,6 +33,9 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     # Volcengine Ark inference endpoint (OpenAI-compatible).
     "volcengine": "ARK_API_KEY",
     "nvidia":     "NVIDIA_API_KEY",
+    # Xiaomi MiMo OpenAI-compatible endpoint; thinking-mode model requires
+    # reasoning_content roundtrip (handled in MimoChatOpenAI).
+    "mimo":       "MIMO_API_KEY",
     # Local runtimes do not authenticate.
     "ollama":     None,
 }

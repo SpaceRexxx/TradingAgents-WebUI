@@ -11,6 +11,7 @@ _OPENAI_COMPATIBLE = (
     "minimax", "minimax-cn",
     "ollama", "openrouter",
     "volcengine", "nvidia",
+    "mimo",
 )
 
 _CANONICAL_IN_PARENS = re.compile(r"\(([a-z0-9_-]+)\)")

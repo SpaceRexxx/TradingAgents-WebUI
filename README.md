@@ -8,7 +8,9 @@
 
 ## 🌟 核心增强特性 (New Features by SpaceRexxx)
 - **原生并行化与沙盒引擎**：彻底修复原版多智能体并行运行时的 `INVALID_CONCURRENT_GRAPH_UPDATE` 内存污染与图谱幻觉冲突，四位分析师真正实现 100% 稳定的并发拉取与推演。
-- **全方位大模型支持**：无缝接入 NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI 等本土常用优质前沿模型。
+- **全方位大模型支持**：无缝接入 **DeepSeek V4 (Flash / Pro)**、**小米 MiMo v2.5 Pro**、NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI 等本土常用优质前沿模型，思考模型 `reasoning_content` round-trip 已就绪。
+- **A 股原生数据栈**：A 股标的自动切换到本土数据源 —— akshare 千股千评 + 雪球讨论（OpenCLI）替代 StockTwits/Reddit、新浪财经宏观 + 东方财富公告 + 财联社替代 Yahoo Finance；美股/港股保持原有方案。
+- **v2 全新 Web UI**：12 阶段重构 —— 四大顶部 Tab（📈 分析中心 / 📚 历史分析 / ⚙️ 配置 / 🏥 诊断），代理状态直接显示在 Tab 标签上（⚪/⏳/✅），SQLite 历史索引支持评级筛选与备注，A/B 对比模式。
 - **动态 Web UI 面板**：支持通过侧边栏直观地注入不同供应商的 API Key，彻底接管系统环境变量。且**分析结尾新增可视化报告渲染与一键导出 PDF 机制**。
 - **底层架构极限重构**：
   - 屏蔽 HTTP/2 降级干扰解决 `openai.APIConnectionError` 报错。
@@ -19,6 +21,10 @@
 ---
 
 ## 更新日志 (News)
+- [2026-05] **v2 redesign** 上线：四 Tab 布局、代理状态显示在 Tab 标签、SQLite 历史索引、A/B 对比、PDF 一键导出。
+- [2026-05] 新增**小米 MiMo v2.5 Pro** 支持（OpenAI 兼容协议，思考模式 `reasoning_content` round-trip）。
+- [2026-04] DeepSeek 升级至 **V4 Flash / V4 Pro**（快速/深度引擎均可选 Pro）。
+- [2026-04] A 股数据栈本土化：akshare 千股千评 + 雪球（OpenCLI） + 新浪财经 + 东方财富公告 + 财联社。
 - [2026-03] **TradingAgents SpaceRexxx Fork** 现已深度整合**无缝原生并行执行引擎**以及**火山引擎 (Volcengine) / NVIDIA DeepSeekV3 / OpenAI API** 支持！
 - [2026-03] 上游原版 **TradingAgents v0.2.1** 发布，已覆盖 GPT-5.4、Gemini 3.1 和 Claude 4.6 模型。
 
@@ -138,6 +144,23 @@ playwright install-deps
 # sudo apt install fonts-noto-cjk -y
 ```
 
+### 🌐 可选依赖：OpenCLI（A 股 / 社交舆情数据桥接）
+
+部分数据源（**雪球讨论流、新浪财经宏观、东方财富、Reddit**）通过 [OpenCLI](https://www.npmjs.com/package/@jackwener/opencli) 调用你本地登录态的浏览器抓取，可绕过 WAF 与登录墙。如果你**只分析美股**且不需要 Reddit 舆情，可以跳过此步骤；如果你要分析 **A 股**，强烈建议安装。
+
+```bash
+# 1. 安装 Node.js（如已安装可跳过）
+#    macOS:  brew install node
+#    其它系统请参考 https://nodejs.org
+
+# 2. 全局安装 OpenCLI
+npm install -g @jackwener/opencli
+
+# 3. 首次使用前打开对应平台并登录（仅需一次）
+opencli xueqiu login         # 雪球
+opencli reddit login         # Reddit（美股社交情绪用）
+```
+
 ### 🛠️ 常见安装问题 (Troubleshooting)
 
 如果您在安装过程中遇到以下报错，请参考对应解决方法：
@@ -182,9 +205,10 @@ playwright install chromium
 
 ```bash
 export OPENAI_API_KEY=...          # OpenAI (GPT系列)
-export DEEPSEEK_API_KEY=...        # DeepSeek
+export DEEPSEEK_API_KEY=...        # DeepSeek V4 Flash / V4 Pro
 export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3等，格式通常为 nvapi- 开头)
 export ARK_API_KEY=...             # 火山引擎 (Volcengine)
+export MIMO_API_KEY=...            # 小米 MiMo v2.5 Pro
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 ```
 
