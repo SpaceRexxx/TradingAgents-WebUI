@@ -8,6 +8,30 @@ services:
     tty: true
     stdin_open: true
 
+  # WebUI 服务（v2 redesign）：一行 `docker compose up webapp` 启动
+  webapp:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    volumes:
+      - tradingagents_data:/home/appuser/.tradingagents
+      - ./.ui_prefs.json:/app/.ui_prefs.json:rw
+    command: >
+      streamlit run webapp.py
+      --server.address=0.0.0.0
+      --server.port=8501
+      --server.headless=true
+      --browser.gatherUsageStats=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
     volumes:

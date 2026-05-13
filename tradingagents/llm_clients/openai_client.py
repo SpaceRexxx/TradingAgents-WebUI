@@ -109,6 +109,17 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
         return chat_result
 
 
+class MimoChatOpenAI(DeepSeekChatOpenAI):
+    """Xiaomi MiMo OpenAI-compatible client.
+
+    MiMo v2.5 Pro is a thinking-mode model that returns ``reasoning_content``
+    on assistant messages and rejects subsequent turns where that field is
+    missing (HTTP 400 "The reasoning_content in the thinking mode must be
+    passed back to the API"). The roundtrip behavior is identical to
+    DeepSeek's thinking models, so we inherit from ``DeepSeekChatOpenAI``.
+    """
+
+
 class MinimaxChatOpenAI(NormalizedChatOpenAI):
     """MiniMax-specific overrides on top of the OpenAI-compatible client.
 
@@ -152,6 +163,7 @@ _PROVIDER_BASE_URL = {
     "minimax-cn": "https://api.minimaxi.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "ollama":     "http://localhost:11434/v1",
+    "mimo":       "https://token-plan-cn.xiaomimimo.com/v1",
 }
 
 
@@ -214,6 +226,8 @@ class OpenAIClient(BaseLLMClient):
         # base NormalizedChatOpenAI stays free of provider branches.
         if self.provider == "deepseek":
             chat_cls = DeepSeekChatOpenAI
+        elif self.provider == "mimo":
+            chat_cls = MimoChatOpenAI
         elif self.provider in ("minimax", "minimax-cn"):
             chat_cls = MinimaxChatOpenAI
         else:

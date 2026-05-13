@@ -30,15 +30,33 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "minimax":    "MINIMAX_API_KEY",
     "minimax-cn": "MINIMAX_CN_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    # Volcengine Ark inference endpoint (OpenAI-compatible).
+    "volcengine": "ARK_API_KEY",
+    "nvidia":     "NVIDIA_API_KEY",
+    # Xiaomi MiMo OpenAI-compatible endpoint; thinking-mode model requires
+    # reasoning_content roundtrip (handled in MimoChatOpenAI).
+    "mimo":       "MIMO_API_KEY",
     # Local runtimes do not authenticate.
     "ollama":     None,
 }
 
 
+import re as _re
+
+_CANONICAL_IN_PARENS = _re.compile(r"\(([a-z0-9_-]+)\)")
+
+
 def get_api_key_env(provider: str) -> Optional[str]:
     """Return the env var name for `provider`'s API key, or None if not applicable.
+
+    Tolerant of WebUI-style localized labels like ``"火山引擎 (Volcengine)"``:
+    if the lowercased input contains a parenthesized ASCII identifier we
+    treat that as the canonical key.
 
     Unknown providers also return None — callers should treat that as
     "no key check possible" rather than as "no key required".
     """
-    return PROVIDER_API_KEY_ENV.get(provider.lower())
+    lowered = provider.lower().strip()
+    m = _CANONICAL_IN_PARENS.search(lowered)
+    key = m.group(1) if m else lowered
+    return PROVIDER_API_KEY_ENV.get(key)

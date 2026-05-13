@@ -6,6 +6,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_news,
 )
+from tradingagents.dataflows.eastmoney_sentiment import to_a_share_code
 
 def create_news_analyst(llm):
     def news_analyst_node(state):
@@ -13,8 +14,18 @@ def create_news_analyst(llm):
         ticker = state["company_of_interest"]
         instrument_context = build_instrument_context(ticker)
         news_lookback = state.get("news_lookback_days", 7)
+        is_a_share = to_a_share_code(ticker) is not None
 
         tools = [get_news, get_global_news]
+
+        if is_a_share:
+            extra_a_share_instruction = (
+                f"\n**A 股专属指令：** 当前标的 {ticker} 是 A 股。"
+                f"调用 `get_global_news` 时请把 `ticker` 参数也设置为 \"{ticker}\"，"
+                "这样会自动追加新浪财经 7×24 实时快讯（中文宏观信号源）。"
+            )
+        else:
+            extra_a_share_instruction = ""
 
         system_message = (
             f"你是一名新闻研究员，任务是分析过去 {news_lookback} 天的近期新闻和趋势。请撰写一份关于当前世界状况的综合报告，内容需与交易和宏观经济相关。\n"
@@ -23,6 +34,7 @@ def create_news_analyst(llm):
             "不要仅仅陈述趋势好坏参半，而要提供可能有助于交易者做出决策的详细、精细的分析和见解。\n"
             "确保在报告末尾附加一个Markdown表格，以有组织地整理关键点。\n"
             "**重要指令：你的所有分析和最终报告都必须使用中文撰写。**"
+            + extra_a_share_instruction
             + get_language_instruction()
         )
 

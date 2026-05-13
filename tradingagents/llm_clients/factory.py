@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from .base_client import BaseLLMClient
@@ -9,7 +10,24 @@ _OPENAI_COMPATIBLE = (
     "glm", "glm-cn",
     "minimax", "minimax-cn",
     "ollama", "openrouter",
+    "volcengine", "nvidia",
+    "mimo",
 )
+
+_CANONICAL_IN_PARENS = re.compile(r"\(([a-z0-9_-]+)\)")
+
+
+def _canonical_provider(provider: str) -> str:
+    """Extract the canonical lowercase provider key.
+
+    The WebUI labels some providers with a localized prefix for display
+    (e.g. ``"火山引擎 (Volcengine)"``). When the label includes a
+    parenthesized ASCII identifier we treat that as the canonical key;
+    otherwise we just lowercase the whole string.
+    """
+    lowered = provider.lower().strip()
+    m = _CANONICAL_IN_PARENS.search(lowered)
+    return m.group(1) if m else lowered
 
 
 def create_llm_client(
@@ -36,7 +54,7 @@ def create_llm_client(
     Raises:
         ValueError: If provider is not supported
     """
-    provider_lower = provider.lower()
+    provider_lower = _canonical_provider(provider)
 
     if provider_lower in _OPENAI_COMPATIBLE:
         from .openai_client import OpenAIClient

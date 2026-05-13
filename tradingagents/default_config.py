@@ -63,9 +63,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": False,
-    # Output language for analyst reports and final decision
-    # Internal agent debate stays in English for reasoning quality
-    "output_language": "English",
+    # Output language for analyst reports and final decision.
+    # 默认中文：WebUI 整体面向中文用户，且部分模型（如小米 MiMo、火山引擎）会严格
+    # 按结构化字段的英文描述输出英文；显式声明语言可保证 Research Manager / Trader
+    # 阶段也始终生成中文。
+    "output_language": "Chinese",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
@@ -76,6 +78,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "news_article_limit": 20,             # max articles per ticker (ticker-news)
     "global_news_article_limit": 10,      # max articles for global/macro news
     "global_news_lookback_days": 7,       # macro news lookback window
+    # Reddit fetching uses OpenCLI (https://github.com/jackwener/OpenCLI) to
+    # drive the user's logged-in Chrome session, bypassing Reddit's WAF.
+    # Requires: opencli on PATH + Browser Bridge Chrome extension + Chrome
+    # logged into reddit.com. Set False to skip Reddit entirely.
+    # Reddit only fires for US/HK tickers; A-share tickers are routed to
+    # Xueqiu (via OpenCLI) and Eastmoney 千股千评 (via akshare) instead.
+    "reddit_enabled": True,
     # Search queries used by get_global_news for macro headlines. Extend or
     # replace to broaden geographic / sector coverage.
     "global_news_queries": [
