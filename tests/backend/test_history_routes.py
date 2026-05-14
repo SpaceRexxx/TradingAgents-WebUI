@@ -56,9 +56,16 @@ def test_patch_history_sets_note(seeded_results):
 
 
 def test_patch_history_sets_rating(seeded_results):
+    from tradingagents.storage import sqlite_history
+
     with _client() as client:
         resp = client.patch(
             "/api/history/TEST/2026-01-01",
             json={"rating": "good"},
         )
-        assert resp.status_code in {200, 501}  # 501 if rating not yet implemented
+        assert resp.status_code == 200
+
+    # Verify the DB write actually landed — guards against UPDATE matching
+    # zero rows (which would silently pass a status-only assertion).
+    rows = sqlite_history.query_analyses(seeded_results, ticker="TEST")
+    assert rows and rows[0].get("user_rating") == "good"

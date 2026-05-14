@@ -21,10 +21,9 @@ class PatchHistoryRequest(BaseModel):
 @router.get("", response_model=HistoryListResponse)
 def list_history(
     ticker: str | None = None,
-    q: str | None = None,
 ) -> HistoryListResponse:
     settings = get_settings_dep()
-    items = history_service.list_analyses(settings.results_dir, ticker=ticker, query=q)
+    items = history_service.list_analyses(settings.results_dir, ticker=ticker)
     return HistoryListResponse(items=items)
 
 

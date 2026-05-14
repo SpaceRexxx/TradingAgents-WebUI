@@ -9,9 +9,7 @@ from tradingagents.storage import sqlite_history
 def list_analyses(
     results_dir: Path,
     ticker: str | None = None,
-    query: str | None = None,
 ) -> list[dict[str, Any]]:
-    # query_analyses does not support full-text search yet; query param ignored
     return sqlite_history.query_analyses(results_dir, ticker=ticker)
 
 
