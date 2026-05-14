@@ -2,10 +2,11 @@
 
 import logging
 import os
+import threading
 from pathlib import Path
 import json
 from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Callable, Dict, Any, Tuple, List, Optional
 
 import yfinance as yf
 
@@ -297,8 +298,8 @@ class TradingAgentsGraph:
         self,
         company_name,
         trade_date,
-        on_chunk=None,
-        cancel_event=None,
+        on_chunk: Optional[Callable[[dict], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ):
         """Run the trading agents graph for a company on a specific date.
 
@@ -346,8 +347,8 @@ class TradingAgentsGraph:
         self,
         company_name,
         trade_date,
-        on_chunk=None,
-        cancel_event=None,
+        on_chunk: Optional[Callable[[dict], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.

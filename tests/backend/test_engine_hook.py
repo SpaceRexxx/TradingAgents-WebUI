@@ -78,3 +78,6 @@ def test_run_graph_stops_when_cancel_event_set():
         )
 
     assert len(received) == 1
+    # Prove the second chunk was withheld — the cancel check must run BEFORE
+    # on_chunk is invoked for each chunk, not after.
+    assert received[0]["market_report"] == "draft-1"
