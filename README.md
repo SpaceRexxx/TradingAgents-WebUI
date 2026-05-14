@@ -8,21 +8,22 @@
 
 ## 🌟 核心增强特性 (New Features by SpaceRexxx)
 - **原生并行化与沙盒引擎**：彻底修复原版多智能体并行运行时的 `INVALID_CONCURRENT_GRAPH_UPDATE` 内存污染与图谱幻觉冲突，四位分析师真正实现 100% 稳定的并发拉取与推演。
-- **全方位大模型支持**：无缝接入 **DeepSeek V4 (Flash / Pro)**、**小米 MiMo v2.5 Pro**、NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI 等本土常用优质前沿模型，思考模型 `reasoning_content` round-trip 已就绪。
+- **全方位大模型支持**：无缝接入 **DeepSeek V4 (Flash / Pro)**、**小米 MiMo v2.5 Pro**、NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI、Anthropic、Google Gemini、Qwen、GLM、MiniMax、OpenRouter、Azure、Ollama 等全主流供应商，思考模型 `reasoning_content` round-trip 已就绪。
 - **A 股原生数据栈**：A 股标的自动切换到本土数据源 —— akshare 千股千评 + 雪球讨论（OpenCLI）替代 StockTwits/Reddit、新浪财经宏观 + 东方财富公告 + 财联社替代 Yahoo Finance；美股/港股保持原有方案。
-- **v2 全新 Web UI**：12 阶段重构 —— 四大顶部 Tab（📈 分析中心 / 📚 历史分析 / ⚙️ 配置 / 🏥 诊断），代理状态直接显示在 Tab 标签上（⚪/⏳/✅），SQLite 历史索引支持评级筛选与备注，A/B 对比模式。
-- **动态 Web UI 面板**：支持通过侧边栏直观地注入不同供应商的 API Key，彻底接管系统环境变量。且**分析结尾新增可视化报告渲染与一键导出 PDF 机制**。
+- **v2.0 全新 Web UI**：里程碑式进度条 + 实时 JS 计时器、竖向左侧代理 Tab（纯客户端切换，不打断流式输出）、历史分析一键跳转分析中心、配置页单行布局，分析师选择改为四个独立 Checkbox。
+- **动态 Web UI 面板**：支持通过配置 Tab 直观注入不同供应商的 API Key，彻底接管系统环境变量。分析结尾**可视化报告渲染与一键导出 PDF**，SQLite 历史索引支持评级筛选、备注与 A/B 对比。
 - **底层架构极限重构**：
   - 屏蔽 HTTP/2 降级干扰解决 `openai.APIConnectionError` 报错。
   - 重构 `memory.py` 消除全局变量状态逃逸。
   - 弃用前沿语法，改用原生 `SystemMessage` 对象注入，完美向下兼容旧版本 `langgraph` (解决 `state_modifier` kwargs 报错)。
   - 强化数据流：增加并修复了 `obv` (能量潮) 等关键指标的数据别名映射。
+- **CLI 深度优化**：显式模块导入替代通配符 `import *`、流式 chunk 增量 merge（零内存冗余）、代理状态机精确修复、所有内联 import 提升至顶层。
 
 ---
 
 ## 更新日志 (News)
-- [2026-05] **v2 redesign** 上线：四 Tab 布局、代理状态显示在 Tab 标签、SQLite 历史索引、A/B 对比、PDF 一键导出。
-- [2026-05] 新增**小米 MiMo v2.5 Pro** 支持（OpenAI 兼容协议，思考模式 `reasoning_content` round-trip）。
+- [2026-05] **v2.0** 发布：里程碑进度条 + 实时 JS 计时器、纯客户端竖向代理 Tab（流式期间可交互，不重启脚本）、历史分析点击跳转分析中心、配置页单行布局、分析师改为 Checkbox。CLI 全面重构：显式导入、流式增量 merge、代理状态机修复。
+- [2026-05] **v1.9** 上线：四 Tab 布局（分析中心 / 历史分析 / 配置 / 诊断）、代理状态显示在 Tab 标签（⚪/⏳/✅）、SQLite 历史索引、A/B 对比、PDF 一键导出、小米 MiMo v2.5 Pro 支持、实时 Token 累计统计。
 - [2026-04] DeepSeek 升级至 **V4 Flash / V4 Pro**（快速/深度引擎均可选 Pro）。
 - [2026-04] A 股数据栈本土化：akshare 千股千评 + 雪球（OpenCLI） + 新浪财经 + 东方财富公告 + 财联社。
 - [2026-03] **TradingAgents SpaceRexxx Fork** 现已深度整合**无缝原生并行执行引擎**以及**火山引擎 (Volcengine) / NVIDIA DeepSeekV3 / OpenAI API** 支持！
@@ -190,7 +191,7 @@ playwright install chromium
 *提示：如果您的环境存在别名或路径隔离，也可以尝试指定绝对路径，例如：`/您的conda环境路径/bin/playwright install chromium`。*
 
 ### 🔄 如何更新 (How to Update)
-如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v1.7.0)：
+如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v2.0)：
 ```bash
 git fetch --all
 git reset --hard origin/main  # 注意：这会丢弃您本地对代码的修改
@@ -205,16 +206,26 @@ playwright install chromium
 
 ```bash
 export OPENAI_API_KEY=...          # OpenAI (GPT系列)
+export ANTHROPIC_API_KEY=...       # Anthropic (Claude系列)
+export GOOGLE_API_KEY=...          # Google (Gemini系列)
 export DEEPSEEK_API_KEY=...        # DeepSeek V4 Flash / V4 Pro
 export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3等，格式通常为 nvapi- 开头)
 export ARK_API_KEY=...             # 火山引擎 (Volcengine)
 export MIMO_API_KEY=...            # 小米 MiMo v2.5 Pro
+export DASHSCOPE_API_KEY=...       # Qwen 国际版
+export DASHSCOPE_CN_API_KEY=...    # Qwen 国内版
+export ZHIPU_API_KEY=...           # GLM (Z.AI 国际版)
+export ZHIPU_CN_API_KEY=...        # GLM (BigModel 国内版)
+export MINIMAX_API_KEY=...         # MiniMax 全球版
+export MINIMAX_CN_API_KEY=...      # MiniMax 国内版
+export OPENROUTER_API_KEY=...      # OpenRouter (多模型聚合)
+export XAI_API_KEY=...             # xAI (Grok系列)
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 ```
 
 > [!IMPORTANT]
-> **WebUI 秘钥持久化 (v1.6.1 新特性)**：
-> 现在您可以在 WebUI 侧边栏直接输入 Key 并点击 **“保存到 .env”**。
+> **WebUI 秘钥持久化**：
+> 您可以在 WebUI **配置** Tab 直接输入 Key 并点击 **”保存到 .env”**。
     - **本地环境**：强烈推荐，可避免重复输入。
     - **公网/云端环境**：**请勿点击保存**，否则您的 Key 将会被持久化记录在服务器磁盘上，存在泄露风险。
 
@@ -234,37 +245,32 @@ cp .env.example .env
 本优化版支持两种互补的运行方式：
 
 ### 1. 启动 Web UI 可视化控制台 (推荐)
-这是最直观的使用方式，支持侧边栏配置 API Key、实时追踪各智能体状态以及一键导出 PDF 研报：
+
+这是最直观的使用方式，配置 Tab 支持注入 API Key、实时里程碑进度条 + JS 倒计时、竖向代理 Tab 流式展示报告、历史分析一键跳转、PDF 一键导出：
+
 ```bash
 streamlit run webapp.py
-```
-
-### 2. 启动极速 CLI 文本端 (黑客风格)
-如果您倾向于在纯终端环境下工作，CLI 版本提供了完全并行的分析引擎和精美的 Rich 控制台渲染：
-```bash
-python -m cli.main
 ```
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
-> 🎉 **惊喜体验**：当整套多智能体多轮博弈结束后，Web 页面将会自动调起我们集成的 `Playwright` 引擎，将极长的 markdown 报表全自动转录渲染为优美的 **PDF 研报**。渲染完成后，您可以直接在左下角点击按钮下载！
+> 🎉 **自动 PDF 研报**：分析完成后，Web 页面会自动调起集成的 `Playwright` 引擎，将 Markdown 报表全自动转录渲染为 **PDF 研报**，点击按钮即可下载。
 
-### 高级功能：极速 CLI 控制台 (Optimized CLI)
+### 2. 启动极速 CLI 文本端
 
-如果您更倾向于在命令行中进行沉浸式交易分析，本项目提供了与 WebUI 功能**完全对等**的优化版 CLI。其不仅能在终端实时渲染出精美的控制台界面，更在效率上达到了极致：
+在纯终端环境下工作，CLI 提供完全并行的分析引擎和精美的 Rich 控制台渲染：
 
-**运行命令：**
 ```bash
 python -m cli.main
 ```
 
-**CLI 核心优化特性：**
-- **⚡ 并发分析启动**：不同于常规 CLI 的串行排队，优化版 CLI 会同步唤起所有选中的分析师团队，实现真正并行的实时进度追踪。
-- **🛰️ 供应商全兼容**：深度适配火山引擎、NVIDIA、DeepSeek、OpenAI 等全部主流供应商。
-- **🔐 动态 Key 注入**：无需手动修改 `.env`，程序启动时会智能检测 Key 状态并支持交互式快速填入与清洗。
-- **📄 自动化 PDF 生成**：CLI 分析一经结束，系统会立即在后台通过 Playwright 完成 PDF 渲染，并保存至 `results/` 目录下。
+**CLI 核心特性：**
+- **⚡ 并发分析启动**：所有选中的分析师团队真正并行运行，实时进度追踪。
+- **🛰️ 供应商全兼容**：支持 DeepSeek、OpenAI、Anthropic、Google、Qwen、GLM、MiniMax、OpenRouter、xAI、火山引擎、NVIDIA、Azure、Ollama 共 13 家供应商。
+- **🔐 动态 Key 注入**：启动时智能检测 Key 状态，缺失时交互式填入并持久化到 `.env`。
+- **📄 报告自动保存**：分析结束后自动将各阶段报告保存至 `results/<ticker>/<date>/` 结构化目录。
 
 <p align="center">
   <img src="assets/cli_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
