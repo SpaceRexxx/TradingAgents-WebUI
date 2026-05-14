@@ -293,7 +293,13 @@ class TradingAgentsGraph:
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
 
-    def propagate(self, company_name, trade_date):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        on_chunk=None,
+        cancel_event=None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         When ``checkpoint_enabled`` is set in config, the graph is recompiled
@@ -324,14 +330,25 @@ class TradingAgentsGraph:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date)
+            return self._run_graph(
+                company_name,
+                trade_date,
+                on_chunk=on_chunk,
+                cancel_event=cancel_event,
+            )
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        on_chunk=None,
+        cancel_event=None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
@@ -349,16 +366,19 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
+        # If a streaming callback is provided we always stream so the caller sees
+        # every per-node delta — this matches what the existing `debug` branch did
+        # but no longer requires `self.debug = True`.
+        if on_chunk is not None or self.debug:
             trace = []
             for chunk in self.graph.stream(init_agent_state, **args):
-                if len(chunk["messages"]) == 0:
-                    pass
-                else:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise RuntimeError("Analysis cancelled by caller")
+                if on_chunk is not None:
+                    on_chunk(chunk)
+                if self.debug and chunk.get("messages"):
                     chunk["messages"][-1].pretty_print()
-                    trace.append(chunk)
-            # Streamed chunks are per-node deltas. Merge them so the returned
-            # state matches what graph.invoke() yields in the non-debug path.
+                trace.append(chunk)
             final_state = {}
             for chunk in trace:
                 final_state.update(chunk)
