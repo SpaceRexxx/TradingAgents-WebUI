@@ -15,6 +15,7 @@ import io
 import asyncio
 import os
 import json
+import time
 import subprocess
 import platform
 
@@ -119,61 +120,98 @@ def _detect_degraded_sources() -> list[str]:
 st.markdown(
     """
     <style>
-    /* 顶部 tabs：更突出 */
+    /* ── Reduce Streamlit default top padding ── */
+    .block-container {
+        padding-top: 1.2rem !important;
+    }
+
+    /* ── Normalize all widget labels to the same style ── */
+    div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stWidgetLabel"] label {
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        color: rgba(255,255,255,0.65) !important;
+        margin-bottom: 0.25rem !important;
+        line-height: 1.4 !important;
+    }
+    /* Match custom .ta-label spans used for the 分析师 heading */
+    .ta-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: rgba(255,255,255,0.65);
+        margin-bottom: 0.25rem;
+        line-height: 1.4;
+    }
+
+    /* ── Tab bar ── */
+    div[data-testid="stTabs"] [role="tablist"] {
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        gap: 0 !important;
+    }
     div[data-testid="stTabs"] button[role="tab"] {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        padding-top: 12px !important;
-        padding-bottom: 12px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.02em !important;
+        padding: 10px 20px !important;
+        color: rgba(255,255,255,0.45) !important;
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        transition: color 0.15s, border-color 0.15s !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"]:hover {
+        color: rgba(255,255,255,0.75) !important;
+        background: transparent !important;
     }
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        background-color: rgba(34, 197, 94, 0.08) !important;
-        border-bottom: 3px solid #22c55e !important;
-        color: #22c55e !important;
-    }
-
-    /* Container 边框：更柔和的圆角 + 微微阴影 */
-    div[data-testid="stContainer"][class*="border"] {
-        border-radius: 10px !important;
-    }
-
-    /* st.info / warning / error 卡片：左侧色条更明显 */
-    div[data-testid="stAlert"] {
-        border-left-width: 4px !important;
-        border-radius: 8px !important;
-    }
-
-    /* 主标题更紧凑（默认间距太大）*/
-    h1 {
-        padding-top: 0 !important;
-        margin-bottom: 0.5rem !important;
-    }
-
-    /* 让 sidebar 略窄一些，给主区域留更多空间 */
-    section[data-testid="stSidebar"] {
-        min-width: 280px !important;
-        max-width: 320px !important;
-    }
-
-    /* expander 标题更醒目 */
-    summary {
+        color: #ffffff !important;
+        background: transparent !important;
+        border-bottom: 2px solid rgba(255,255,255,0.85) !important;
         font-weight: 600 !important;
     }
 
-    /* button：默认主操作按钮高亮成品牌绿 */
+    /* ── Container cards ── */
+    div[data-testid="stContainer"][class*="border"] {
+        border-radius: 8px !important;
+        border-color: rgba(255,255,255,0.1) !important;
+    }
+
+    /* ── Alert cards ── */
+    div[data-testid="stAlert"] {
+        border-left-width: 3px !important;
+        border-radius: 6px !important;
+    }
+
+    /* ── Typography ── */
+    h1 {
+        padding-top: 0 !important;
+        margin-bottom: 0.25rem !important;
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.01em !important;
+    }
+    h2, h3 { letter-spacing: -0.01em !important; }
+
+    /* ── Expander ── */
+    summary { font-weight: 600 !important; }
+
+    /* ── Primary button ── */
     button[kind="primary"], button[data-testid="stBaseButton-primary"] {
-        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+        background: #16a34a !important;
         border: none !important;
         color: white !important;
         font-weight: 600 !important;
+        border-radius: 6px !important;
     }
     button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+        background: #15803d !important;
     }
 
-    /* 表格：紧凑 + 边框柔和 */
+    /* ── Tables ── */
     table {
-        border-radius: 8px !important;
+        border-radius: 6px !important;
         overflow: hidden !important;
     }
     </style>
@@ -182,20 +220,8 @@ st.markdown(
 )
 
 # 主标题 + 副标题
-_t_col1, _t_col2 = st.columns([5, 2])
-with _t_col1:
-    st.title("📈 TradingAgents")
-    st.caption("多代理智能交易分析框架 · v2 · A 股 / 美股 / 港股")
-with _t_col2:
-    st.write("")
-    st.write("")
-    # 简短状态指示器（实时显示当前 provider + model）
-    try:
-        _hdr_provider = st.session_state.ui_prefs.get("provider", "DeepSeek")
-        _hdr_deep = st.session_state.ui_prefs.get(f"{_hdr_provider.lower()}_deep") or "未选"
-        st.caption(f"🔌 {_hdr_provider}  ·  🧠 {_hdr_deep}")
-    except Exception:
-        pass
+st.title("TradingAgents")
+st.caption("多代理智能交易分析框架 · v2 · A 股 / 美股 / 港股")
 
 # Stage 9: 启动时检测降级数据源并在顶部展示 banner
 _degraded = _detect_degraded_sources()
@@ -206,7 +232,140 @@ if _degraded:
         )
         for _reason in _degraded:
             st.caption(f"• {_reason}")
-        st.caption("👉 详细诊断和修复建议见 **🏥 诊断** tab")
+        st.caption("👉 详细诊断和修复建议见 **诊断** tab")
+
+# --- 欢迎浮层 + 问号按钮（首次访问自动展示；问号按钮随时可再次打开）---
+# HTML + CSS via st.markdown (script tags are not executed here — see components.html below)
+st.markdown("""
+<style>
+#ta-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 999999;
+    display: flex; align-items: center; justify-content: center;
+}
+#ta-overlay.ta-hidden { display: none; }
+#ta-modal {
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    padding: 2.25rem 2.5rem 2rem;
+    max-width: 560px; width: 92%;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    animation: ta-fadein 0.2s ease;
+}
+@keyframes ta-fadein { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+#ta-close {
+    position: absolute; top: 1rem; right: 1rem;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.55);
+    font-size: 13px; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+#ta-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+#ta-help {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(255,255,255,0.5);
+    font-size: 15px; font-weight: 600; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 99998;
+    transition: background 0.15s, color 0.15s;
+}
+#ta-help:hover { background: rgba(255,255,255,0.14); color: #fff; }
+#ta-modal h2 { margin: 0 0 0.65rem; font-size: 1.3rem; font-weight: 700; color: #fff; }
+#ta-modal p  { color: rgba(255,255,255,0.72); line-height: 1.65; margin: 0 0 1rem; font-size: 0.925rem; }
+#ta-modal ol { color: rgba(255,255,255,0.72); padding-left: 1.3rem; margin: 0 0 1rem; line-height: 1.9; font-size: 0.925rem; }
+#ta-modal ol li strong { color: rgba(255,255,255,0.92); }
+#ta-modal code { background: rgba(255,255,255,0.1); border-radius: 4px; padding: 1px 5px; font-size: 0.85rem; }
+#ta-modal .ta-footer { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.9rem; margin-top: 0.25rem; color: rgba(255,255,255,0.45); font-size: 0.82rem; line-height: 1.5; }
+#ta-modal .ta-footer strong { color: rgba(255,255,255,0.65); }
+</style>
+
+<div id="ta-overlay" class="ta-hidden">
+  <div id="ta-modal">
+    <button id="ta-close">✕</button>
+    <h2>欢迎使用 TradingAgents</h2>
+    <p>
+      本框架编排 <strong>12 个 AI 代理</strong>（4 分析师 + 3 研究 + 1 交易员 + 4 风险）
+      在虚拟会议室里就一个标的进行<strong>辩论 + 投票 + 最终决策</strong>。
+    </p>
+    <p><strong style="color:rgba(255,255,255,0.9)">三步开始：</strong></p>
+    <ol>
+      <li>在左侧输入 <strong>股票代码</strong>（例如 <code>NVDA</code>、<code>300990.SZ</code>、<code>0700.HK</code>）</li>
+      <li>选择 <strong>分析师团队</strong>、<strong>研究深度</strong>、<strong>回溯窗口</strong> 和 <strong>是否持有仓位</strong></li>
+      <li>点击 <strong>开始分析</strong> 按钮，结果将在右侧实时展示</li>
+    </ol>
+    <div class="ta-footer">
+      <strong>第一次使用？</strong> 先去 <strong>诊断</strong> tab 检查依赖是否就绪；再去 <strong>配置</strong> tab 选好 LLM 提供商和模型。
+    </div>
+  </div>
+</div>
+
+<button id="ta-help" title="使用帮助">?</button>
+""", unsafe_allow_html=True)
+
+# JS must run via components.html (an iframe whose script CAN execute),
+# then reach into window.parent.document to wire up the overlay buttons.
+_st_components.html("""
+<script>
+(function() {
+    var doc = window.parent.document;
+    var ls  = window.parent.localStorage;
+
+    function taClose() {
+        var el = doc.getElementById('ta-overlay');
+        if (el) el.classList.add('ta-hidden');
+        try { ls.setItem('ta_welcomed_v1', '1'); } catch(e) {}
+    }
+    function taOpen() {
+        var el = doc.getElementById('ta-overlay');
+        if (el) el.classList.remove('ta-hidden');
+    }
+
+    function init() {
+        // 仅首次访问时展示
+        try {
+            if (!ls.getItem('ta_welcomed_v1')) {
+                var el = doc.getElementById('ta-overlay');
+                if (el) el.classList.remove('ta-hidden');
+            }
+        } catch(e) {}
+
+        // 绑定关闭按钮
+        var closeBtn = doc.getElementById('ta-close');
+        if (closeBtn) { closeBtn.onclick = taClose; }
+
+        // 点击遮罩关闭
+        var overlay = doc.getElementById('ta-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) taClose();
+            });
+        }
+
+        // 绑定问号按钮
+        var helpBtn = doc.getElementById('ta-help');
+        if (helpBtn) { helpBtn.onclick = taOpen; }
+    }
+
+    // 等 parent DOM 就绪后执行
+    if (doc.readyState === 'loading') {
+        doc.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+""", height=0)
 
 # --- 定义团队结构 ---
 TEAMS_STRUCTURE = {
@@ -415,60 +574,115 @@ ANALYSIS_PHASES = [
 ]
 
 
-def detect_current_phase(chunk: dict) -> tuple[str, int]:
-    """从 streaming chunk 推断当前所处阶段。返回 (phase_key, progress_0_100)。"""
+def detect_current_phase(chunk: dict, n_analysts: int = 4,
+                         analysts_done: int = 0, max_debate: int = 2) -> tuple[str, int]:
+    """推断当前阶段，返回 (phase_key, progress_0_100)。
+    progress 在每个阶段内线性推进：
+      analysts 0-24 | research 25-49 | trader 50-54 | risk 55-79 | decision 80-100
+    """
     if chunk.get("final_trade_decision"):
         return "decision", 100
+
     if chunk.get("risk_debate_state") and chunk["risk_debate_state"].get("history"):
-        return "risk", 85
+        _hist = len(chunk["risk_debate_state"]["history"])
+        _max  = max(max_debate * 3, 1)   # 3 agents per round
+        _sub  = min(_hist / _max, 1.0)
+        return "risk", int(55 + _sub * 24)
+
     if chunk.get("trader_investment_plan"):
-        return "trader", 70
+        return "trader", 54
+
     if chunk.get("investment_plan"):
-        return "research", 55
+        return "research", 49
+
     if chunk.get("investment_debate_state") and chunk["investment_debate_state"].get("history"):
-        return "research", 35
-    if any(chunk.get(f"{k}_report") for k in ("market", "news", "sentiment", "fundamentals")):
-        return "analysts", 15
-    return "analysts", 5
+        _hist = len(chunk["investment_debate_state"]["history"])
+        _max  = max(max_debate * 2, 1)   # bull + bear per round
+        _sub  = min(_hist / _max, 1.0)
+        return "research", int(25 + _sub * 23)
+
+    # analyst phase — progress driven by completed analysts
+    _sub = analysts_done / max(n_analysts, 1)
+    return "analysts", int(_sub * 24)
 
 
-def render_phase_stepper(current_phase_key: str, elapsed_seconds: float | None = None):
-    """渲染 5 阶段水平进度卡片。"""
-    # 确定每个阶段的状态：done / active / pending
+def render_phase_stepper(current_phase_key: str, elapsed_seconds: float | None = None, progress_pct: int = 0):
+    """渲染里程碑进度条：轨道 + 5 个节点 + 实时计时器。"""
+    import time as _time_module
     phase_keys = [p["key"] for p in ANALYSIS_PHASES]
     try:
         current_idx = phase_keys.index(current_phase_key)
     except ValueError:
         current_idx = 0
 
-    cols = st.columns(len(ANALYSIS_PHASES))
-    for i, (col, phase) in enumerate(zip(cols, ANALYSIS_PHASES)):
-        with col:
-            if i < current_idx:
-                state_icon = "✅"
-                bg = "#1e3a2f"   # 深绿
-                label_color = "#9be9a8"
-            elif i == current_idx:
-                state_icon = "⏳"
-                bg = "#3a3520"   # 深黄
-                label_color = "#f7ce46"
-            else:
-                state_icon = "⚪"
-                bg = "#1f2937"   # 深灰
-                label_color = "#94a3b8"
-            st.markdown(
-                f"""<div style="background:{bg};border-radius:8px;padding:10px;text-align:center;">
-                <div style="font-size:22px;line-height:1.2;">{phase['icon']}</div>
-                <div style="color:{label_color};font-size:12px;font-weight:600;margin-top:4px;">{phase['label']}</div>
-                <div style="color:{label_color};font-size:14px;margin-top:2px;">{state_icon}</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+    n = len(ANALYSIS_PHASES)
+    # 每个节点中心在 flex 行中的百分比位置（以容器宽度为基准）
+    # flex:1 × n → 第 i 个中心在 (i + 0.5) / n * 100 %
+    dot_pcts = [(i + 0.5) / n * 100 for i in range(n)]
+    bar_left = dot_pcts[0]      # 第一个节点中心
+    bar_right = dot_pcts[-1]    # 最后一个节点中心
+    bar_total = bar_right - bar_left
 
-    # 已耗时显示
+    # 用 progress_pct 线性插值填充宽度（超过最后节点时钳制）
+    fill_width = min((progress_pct / 100) * bar_total, bar_total)
+
+    # 生成节点 HTML
+    dots_html = ""
+    for i, phase in enumerate(ANALYSIS_PHASES):
+        if i < current_idx:
+            dot_css = "background:#22c55e;border:2px solid #22c55e;"
+            symbol = "✓"; sym_css = "color:#fff;font-size:11px;font-weight:700;"
+            lbl_css = "color:rgba(255,255,255,0.6);font-weight:400;"
+        elif i == current_idx:
+            dot_css = "background:#f7ce46;border:2px solid #f7ce46;"
+            symbol = ""; sym_css = ""
+            lbl_css = "color:#f7ce46;font-weight:600;"
+        else:
+            dot_css = "background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.18);"
+            symbol = ""; sym_css = ""
+            lbl_css = "color:rgba(255,255,255,0.28);font-weight:400;"
+
+        dots_html += (
+            f'<div style="flex:1;display:flex;flex-direction:column;align-items:center;">'
+            f'<div style="width:22px;height:22px;border-radius:50%;{dot_css}'
+            f'display:flex;align-items:center;justify-content:center;position:relative;z-index:2;">'
+            f'<span style="{sym_css}">{symbol}</span></div>'
+            f'<div style="font-size:11px;{lbl_css}margin-top:7px;text-align:center;white-space:nowrap;">'
+            f'{phase["label"]}</div></div>'
+        )
+
+    html = f"""
+<div style="position:relative;padding:10px 0 36px 0;margin:4px 0;">
+  <!-- 轨道底色 -->
+  <div style="position:absolute;top:20px;left:{bar_left:.2f}%;right:{100-bar_right:.2f}%;
+              height:3px;background:rgba(255,255,255,0.1);border-radius:2px;z-index:0;"></div>
+  <!-- 填充 -->
+  <div style="position:absolute;top:20px;left:{bar_left:.2f}%;width:{fill_width:.2f}%;
+              height:3px;background:#22c55e;border-radius:2px;z-index:1;transition:width .4s ease;"></div>
+  <!-- 节点行 -->
+  <div style="display:flex;position:relative;z-index:2;">{dots_html}</div>
+</div>"""
+    st.markdown(html, unsafe_allow_html=True)
+
+    # 实时计时器（JS setInterval，1 s 精度）
     if elapsed_seconds is not None and elapsed_seconds > 0:
-        st.caption(f"⏱️ 已耗时：**{format_elapsed(elapsed_seconds)}**" +
-                   (f" · 当前阶段：**{ANALYSIS_PHASES[current_idx]['label']}**" if current_idx < len(ANALYSIS_PHASES) else ""))
+        _start_ms = int((_time_module.time() - elapsed_seconds) * 1000)
+        _phase_label = ANALYSIS_PHASES[current_idx]['label'] if current_idx < len(ANALYSIS_PHASES) else ""
+        _st_components.html(f"""
+<div id="ta-t" style="font-size:0.78rem;color:rgba(255,255,255,0.45);padding:6px 0 14px;"></div>
+<script>
+(function(){{
+  var el=document.getElementById('ta-t');
+  var s0={_start_ms}, ph={repr(_phase_label)};
+  function tick(){{
+    var e=Math.floor((Date.now()-s0)/1000),m=Math.floor(e/60),s=e%60;
+    var t=m>0?m+' 分 '+String(s).padStart(2,'0')+' 秒':s+' 秒';
+    if(el) el.textContent='⏱ 已耗时 '+t+(ph?' · '+ph:'');
+  }}
+  tick(); setInterval(tick,1000);
+}})();
+</script>
+""", height=38)
 
 
 def format_elapsed(seconds: float) -> str:
@@ -642,9 +856,8 @@ def load_historical_analyses(base_dir):
 
 # 【新增】点击加载按钮时的回调函数
 def load_selected_analysis(json_path):
-    """加载选定的历史 JSON 文件到 session_state"""
-    reset_state() # 首先清空当前状态
-    # 用户切换历史记录 → 顺便清掉历史扫描缓存，确保下次 tab_history 看最新
+    """加载选定的历史 JSON 文件到 session_state，并跳转到分析中心 tab"""
+    reset_state()
     try:
         load_historical_analyses_cached.clear()
     except Exception:
@@ -658,6 +871,7 @@ def load_selected_analysis(json_path):
             'pdf': str(Path(json_path).parent / "report.pdf")
         }
         st.session_state.show_live_report_view = False
+        st.session_state._jump_to_analyze_tab = True   # 触发 JS tab 切换
     except Exception as e:
         st.error(f"加载历史记录失败: {e}")
 
@@ -822,12 +1036,27 @@ with sync_playwright() as p:
 
 # --- 主布局：顶部 Tabs（信息架构 v1.9.1）---
 tab_analyze, tab_history, tab_config, tab_diagnostic = st.tabs([
-    "📈 分析中心", "📚 历史分析", "⚙️ 配置", "🏥 诊断",
+    "分析中心", "历史分析", "配置", "诊断",
 ])
 
-# ---- ⚙️ 配置 ----
+# 历史记录加载后自动跳转到「分析中心」tab（JS 点击第一个 tab）
+if st.session_state.pop("_jump_to_analyze_tab", False):
+    _st_components.html("""
+<script>
+(function(){
+  function switchTab(){
+    var tabs=window.parent.document.querySelectorAll('div[data-testid="stTabs"] button[role="tab"]');
+    if(tabs.length>0){ tabs[0].click(); return true; }
+    return false;
+  }
+  if(!switchTab()){ setTimeout(switchTab,300); }
+})();
+</script>
+""", height=0)
+
+# ---- 配置 ----
 with tab_config:
-    st.header("⚙️ 配置")
+    st.header("配置")
     st.caption("这里是一次性配置：存储路径、LLM 提供商、API Key、模型。修改后会自动持久化到 .ui_prefs.json。")
     # --- 【新增】报告存储位置选择 ---
     st.markdown("---")
@@ -835,16 +1064,15 @@ with tab_config:
     saved_results_dir = st.session_state.ui_prefs.get("results_dir", "./results")
 
     # --- 【新增】原生文件夹选择逻辑 ---
-    col_path, col_btn = st.columns([3, 1])
+    col_path, col_btn = st.columns([3, 1], vertical_alignment="bottom")
     with col_path:
         input_results_dir = st.text_input(
-            "报告保存根目录:", 
+            "报告保存根目录:",
             value=saved_results_dir,
             help="分析结果（JSON 和 PDF）将存放在此目录下。支持绝对路径。"
         )
     with col_btn:
-        st.write("") # 垂直对齐调整
-        if st.button("📁 选择", help="弹出系统文件夹选择器"):
+        if st.button("📁 选择", help="弹出系统文件夹选择器", use_container_width=True):
             try:
                 folder_selected = None
                 # macOS 特化处理：使用 osascript 避开线程陷阱
@@ -881,267 +1109,287 @@ with tab_config:
     saved_prov = st.session_state.ui_prefs.get("provider")
     prov_idx = prov_keys.index(saved_prov) if saved_prov in prov_keys else 0
     
-    selected_llm_provider_name = st.selectbox("请选择 LLM 提供商:", options=prov_keys, index=prov_idx)
-    if selected_llm_provider_name != saved_prov:
-        update_pref("provider", selected_llm_provider_name)
-        
+    # ── LLM 提供商 · API Key · 保存按钮（同一行）────────────────────────────
+    _cfg_r1_prov, _cfg_r1_key, _cfg_r1_btn = st.columns([1.4, 3, 1.4], vertical_alignment="bottom")
+
+    with _cfg_r1_prov:
+        st.markdown('<span class="ta-label">LLM 提供商</span>', unsafe_allow_html=True)
+        selected_llm_provider_name = st.selectbox(
+            "LLM 提供商", options=prov_keys, index=prov_idx,
+            label_visibility="collapsed",
+        )
+        if selected_llm_provider_name != saved_prov:
+            update_pref("provider", selected_llm_provider_name)
+
     provider_key = selected_llm_provider_name.lower()
     pref_api_key_name = f"{provider_key}_api_key"
     saved_api_key = st.session_state.ui_prefs.get(pref_api_key_name, "")
-    
-    input_api_key = st.text_input(
-        f"API Key (可选，将优先使用并覆盖环境变量):", 
-        value=saved_api_key, 
-        type="password",
-        help="留空则自动读取系统环境变量中的对应 KEY"
-    )
-    if input_api_key != saved_api_key:
-        update_pref(pref_api_key_name, input_api_key)
-        
-    # 【新增】保存到 .env 的功能
+
+    with _cfg_r1_key:
+        st.markdown('<span class="ta-label">API Key</span>', unsafe_allow_html=True)
+        input_api_key = st.text_input(
+            "API Key", value=saved_api_key, type="password",
+            placeholder="留空则自动读取系统环境变量",
+            label_visibility="collapsed",
+        )
+        if input_api_key != saved_api_key:
+            update_pref(pref_api_key_name, input_api_key)
+
     env_key_map = PROVIDER_ENV_KEY_MAP
     target_env_var = env_key_map.get(selected_llm_provider_name.lower())
-    
-    if input_api_key and target_env_var:
-        if st.button(f"💾 保存 {selected_llm_provider_name} Key 到 .env", help="持久化保存到磁盘，下次启动自动加载"):
-            if update_dotenv_file(target_env_var, input_api_key):
-                st.success(f"已成功将 {target_env_var} 保存到 .env！")
-                st.toast("配置已持久化 💾")
-        
+
+    with _cfg_r1_btn:
+        st.markdown('<span class="ta-label">&nbsp;</span>', unsafe_allow_html=True)
+        if input_api_key and target_env_var:
+            if st.button(f"💾 保存到 .env", use_container_width=True,
+                         help="持久化保存到磁盘，下次启动自动加载"):
+                if update_dotenv_file(target_env_var, input_api_key):
+                    st.success(f"已保存 {target_env_var} 到 .env")
+                    st.toast("配置已持久化 💾")
+        else:
+            st.button("💾 保存到 .env", use_container_width=True, disabled=True)
+
     backend_url = PROVIDER_OPTIONS[selected_llm_provider_name]
     st.markdown("---")
     st.subheader("选择模型引擎")
+
+    # ── 快速思考引擎 · 深度思考引擎（同一行）────────────────────────────────
     provider_key = selected_llm_provider_name.lower()
     shallow_options = SHALLOW_AGENT_OPTIONS.get(provider_key, [])
     deep_options = DEEP_AGENT_OPTIONS.get(provider_key, [])
     format_func = lambda x: x[0]
 
-    saved_shallow = st.session_state.ui_prefs.get(f"{provider_key}_shallow")
-    shallow_idx = _get_opt_idx(shallow_options, saved_shallow)
-    selected_shallow_tuple = st.selectbox("快速思考引擎:", options=shallow_options, format_func=format_func, index=shallow_idx, help="用于快速、常规任务的轻量级模型")
-    if selected_shallow_tuple and selected_shallow_tuple[1] != saved_shallow:
-        update_pref(f"{provider_key}_shallow", selected_shallow_tuple[1])
-        
+    _cfg_r2_shallow, _cfg_r2_deep = st.columns(2)
+
+    with _cfg_r2_shallow:
+        saved_shallow = st.session_state.ui_prefs.get(f"{provider_key}_shallow")
+        shallow_idx = _get_opt_idx(shallow_options, saved_shallow)
+        selected_shallow_tuple = st.selectbox(
+            "快速思考引擎", options=shallow_options, format_func=format_func,
+            index=shallow_idx, help="用于快速、常规任务的轻量级模型",
+        )
+        if selected_shallow_tuple and selected_shallow_tuple[1] != saved_shallow:
+            update_pref(f"{provider_key}_shallow", selected_shallow_tuple[1])
     shallow_thinker = selected_shallow_tuple[1] if selected_shallow_tuple else None
-    
-    saved_deep = st.session_state.ui_prefs.get(f"{provider_key}_deep")
-    deep_idx = _get_opt_idx(deep_options, saved_deep)
-    selected_deep_tuple = st.selectbox("深度思考引擎:", options=deep_options, format_func=format_func, index=deep_idx, help="用于复杂分析和深度辩论的强大模型")
-    if selected_deep_tuple and selected_deep_tuple[1] != saved_deep:
-        update_pref(f"{provider_key}_deep", selected_deep_tuple[1])
-        
+
+    with _cfg_r2_deep:
+        saved_deep = st.session_state.ui_prefs.get(f"{provider_key}_deep")
+        deep_idx = _get_opt_idx(deep_options, saved_deep)
+        selected_deep_tuple = st.selectbox(
+            "深度思考引擎", options=deep_options, format_func=format_func,
+            index=deep_idx, help="用于复杂分析和深度辩论的强大模型",
+        )
+        if selected_deep_tuple and selected_deep_tuple[1] != saved_deep:
+            update_pref(f"{provider_key}_deep", selected_deep_tuple[1])
     deep_thinker = selected_deep_tuple[1] if selected_deep_tuple else None
 
 
 
-# --- UI 组件 (侧边栏) ---
-with st.sidebar:
-    st.header("分析配置")
-
-    # Stage 7: Watchlist 快速选股
-    _watchlist = st.session_state.ui_prefs.get("watchlist", [])
-    if _watchlist:
-        with st.expander(f"⭐ 自选股 ({len(_watchlist)})", expanded=False):
-            _wl_cols = st.columns(3)
-            for _i, _t in enumerate(_watchlist):
-                _wl_cols[_i % 3].button(
-                    _t,
-                    key=f"wl_{_t}",
-                    use_container_width=True,
-                    on_click=lambda t=_t: st.session_state.update({"_ticker_quick": t}),
-                )
-
-    # 如果点了 watchlist 里的 ticker，用作 input 的默认值
-    _ticker_default = st.session_state.pop("_ticker_quick", "")
-    selected_ticker = st.text_input("请输入股票代码:", value=_ticker_default).upper()
-
-    # Stage 10: 实时价格快照（输入 ticker 后实时显示当前价 / 涨跌幅）
-    if selected_ticker:
-        @st.cache_data(ttl=60, show_spinner=False)
-        def _live_quote(ticker: str) -> dict | None:
-            """通过 OpenCLI xueqiu stock 获取实时报价；1 分钟内缓存。"""
-            import subprocess as _sub
-            import shutil as _sh
-            if not _sh.which("opencli"):
-                return None
-            # 把 ticker 转成 xueqiu 格式
-            try:
-                from tradingagents.dataflows.xueqiu import to_xueqiu_symbol
-                symbol = to_xueqiu_symbol(ticker)
-            except Exception:
-                symbol = ticker
-            try:
-                proc = _sub.run(
-                    ["opencli", "xueqiu", "stock", symbol, "-f", "json"],
-                    capture_output=True, text=True, timeout=8,
-                )
-                if proc.returncode == 0 and proc.stdout:
-                    data = json.loads(proc.stdout)
-                    if isinstance(data, list) and data:
-                        return data[0]
-                    if isinstance(data, dict):
-                        return data
-            except Exception:
-                pass
-            return None
-
-        _quote = _live_quote(selected_ticker)
-        if _quote:
-            _price = _quote.get("price")
-            _name = _quote.get("name", "")
-            _chg_pct = _quote.get("changePercent", "")
-            _is_up = isinstance(_quote.get("change"), (int, float)) and _quote["change"] >= 0
-            _arrow = "🟢↑" if _is_up else "🔴↓"
-            with st.container(border=True):
-                st.markdown(f"**{_name or selected_ticker}** {_arrow}")
-                st.metric(
-                    "实时价格",
-                    f"{_price}" if _price else "—",
-                    delta=_chg_pct or None,
-                    label_visibility="collapsed",
-                )
-
-    # 加 / 删自选股按钮
-    if selected_ticker:
-        _is_in_wl = selected_ticker in _watchlist
-        _wl_label = "❌ 从自选股移除" if _is_in_wl else "⭐ 加入自选股"
-        if st.button(_wl_label, use_container_width=True, key="wl_toggle"):
-            if _is_in_wl:
-                _watchlist.remove(selected_ticker)
-            else:
-                _watchlist.append(selected_ticker)
-            update_pref("watchlist", _watchlist)
-            st.rerun()
-    analysis_date = st.date_input("请选择分析日期:", datetime.date.today(), max_value=datetime.date.today()).strftime("%Y-%m-%d")
+# ---- 分析中心 ----
+with tab_analyze:
     analyst_options = {"市场分析师": AnalystType.MARKET, "舆情分析师": AnalystType.SOCIAL, "新闻分析师": AnalystType.NEWS, "基本面分析师": AnalystType.FUNDAMENTALS}
+    _watchlist = st.session_state.ui_prefs.get("watchlist", [])
 
-    # Stage 7: 分析模板（一键应用预置参数）
-    _tmpl_names = list(ANALYSIS_TEMPLATES.keys())
-    _tmpl_name = st.selectbox(
-        "🎨 应用模板（可选）",
-        options=["—— 自定义 ——"] + _tmpl_names,
-        index=0,
-        help="选模板后会自动填充下面的分析师 / 研究深度 / 回溯窗口。",
-    )
-    _tmpl_data = ANALYSIS_TEMPLATES.get(_tmpl_name) if _tmpl_name != "—— 自定义 ——" else None
-    if _tmpl_data:
-        st.caption(f"📋 {_tmpl_data['description']}")
+    # 自选股快捷入口
+    if _watchlist:
+        _wl_pill_cols = st.columns(min(len(_watchlist), 6))
+        for _i, _t in enumerate(_watchlist[:6]):
+            _wl_pill_cols[_i].button(
+                _t, key=f"wl_{_t}", use_container_width=True,
+                on_click=lambda t=_t: st.session_state.update({"_ticker_quick": t}),
+            )
 
-    _default_analysts = _tmpl_data["analysts"] if _tmpl_data else list(analyst_options.keys())
-    selected_analyst_names = st.multiselect("请选择分析师团队:", options=list(analyst_options.keys()), default=_default_analysts)
-    selected_analysts = [analyst_options[name] for name in selected_analyst_names]
-    depth_options = {"极浅 - 快速总结": 0, "浅层 - 1轮辩论": 1, "中等 - 2轮辩论": 2, "深入 - 3轮辩论": 3}
-    _depth_default_idx = 2
-    if _tmpl_data:
-        _depth_default_idx = _tmpl_data["depth"]
-    selected_depth_name = st.selectbox("请选择研究深度 (轮数):", options=list(depth_options.keys()), index=_depth_default_idx)
-    selected_research_depth = depth_options[selected_depth_name]
+    # ── 第一行：股票代码 · 已持有仓位 · 开始分析 ──────────────────────────────
+    _ticker_default = st.session_state.pop("_ticker_quick", "")
+    _row1_ticker, _row1_pos, _row1_btn = st.columns([4, 1.2, 1.8], vertical_alignment="center")
 
-    # 【新增】回溯天数选择（模板会覆盖默认值）
-    _saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
-    _lb_default = _tmpl_data["lookback_days"] if _tmpl_data else _saved_lookback
-    selected_lookback_days = st.slider(
-        "分析回溯窗口 (天):",
-        min_value=5,
-        max_value=120,
-        value=_lb_default,
-        help="设定 AI 分析技术指标和价格走势时向回搜索的时间范围（自然日）。"
-    )
-    if not _tmpl_data and selected_lookback_days != _saved_lookback:
-        update_pref("lookback_days", selected_lookback_days)
+    with _row1_ticker:
+        _tc, _wc = st.columns([6, 1])
+        with _tc:
+            selected_ticker = st.text_input(
+                "股票代码", value=_ticker_default,
+                placeholder="NVDA / 300990.SZ / 0700.HK",
+                label_visibility="collapsed",
+            ).upper()
+        with _wc:
+            if selected_ticker:
+                _is_in_wl = selected_ticker in _watchlist
+                if st.button(
+                    "★" if not _is_in_wl else "✕",
+                    key="wl_toggle", use_container_width=True,
+                    help="加入自选股" if not _is_in_wl else "移除自选股",
+                ):
+                    if _is_in_wl:
+                        _watchlist.remove(selected_ticker)
+                    else:
+                        _watchlist.append(selected_ticker)
+                    update_pref("watchlist", _watchlist)
+                    st.rerun()
+        if selected_ticker:
+            @st.cache_data(ttl=60, show_spinner=False)
+            def _live_quote(ticker: str) -> dict | None:
+                import subprocess as _sub, shutil as _sh
+                if not _sh.which("opencli"):
+                    return None
+                try:
+                    from tradingagents.dataflows.xueqiu import to_xueqiu_symbol
+                    symbol = to_xueqiu_symbol(ticker)
+                except Exception:
+                    symbol = ticker
+                try:
+                    proc = _sub.run(["opencli", "xueqiu", "stock", symbol, "-f", "json"],
+                                    capture_output=True, text=True, timeout=8)
+                    if proc.returncode == 0 and proc.stdout:
+                        data = json.loads(proc.stdout)
+                        if isinstance(data, list) and data:
+                            return data[0]
+                        if isinstance(data, dict):
+                            return data
+                except Exception:
+                    pass
+                return None
+            _quote = _live_quote(selected_ticker)
+            if _quote:
+                _price   = _quote.get("price")
+                _name    = _quote.get("name", "")
+                _chg_pct = _quote.get("changePercent", "")
+                _is_up   = isinstance(_quote.get("change"), (int, float)) and _quote["change"] >= 0
+                _clr     = "#22c55e" if _is_up else "#ef4444"
+                _arrow   = "↑" if _is_up else "↓"
+                st.markdown(
+                    f'<div style="display:flex;align-items:baseline;gap:0.4rem;margin:0.1rem 0 0;">'
+                    f'<span style="font-size:0.85rem;font-weight:600">{_name or selected_ticker}</span>'
+                    f'<span style="font-size:0.95rem;font-weight:700">{_price or "—"}</span>'
+                    f'<span style="color:{_clr};font-size:0.8rem">{_arrow} {_chg_pct}</span>'
+                    f'</div>', unsafe_allow_html=True,
+                )
 
-    # 【新增】新闻/情绪回溯天数选择
-    _saved_news_lb = st.session_state.ui_prefs.get("news_lookback_days", 7)
-    _nlb_default = _tmpl_data["news_lookback_days"] if _tmpl_data else _saved_news_lb
-    selected_news_lookback_days = st.slider(
-        "新闻/情绪分析窗口 (天):",
-        min_value=1,
-        max_value=30,
-        value=_nlb_default,
-        help="设定 AI 分析新闻和社交媒体情绪时向回搜索的时间范围（自然日）。"
-    )
-    if not _tmpl_data and selected_news_lookback_days != _saved_news_lb:
-        update_pref("news_lookback_days", selected_news_lookback_days)
-    
-    # 存储位置 / LLM 提供商 / API Key / 模型 已迁移至顶部 "⚙️ 配置" tab
-    st.markdown("---")
-    position_status_option = st.radio("您当前是否持有该股票？", options=["否，我没有持仓", "是，我已持有仓位"], index=0, horizontal=True)
-    has_position = "已持有" if "是" in position_status_option else "未持有"
-    st.markdown("---")
-    
-    # Stage 9: 如果当前 ticker+date 有 checkpoint，提示用户可以续跑
+    with _row1_pos:
+        _pos_toggle = st.toggle("已持有仓位")
+        has_position = "已持有" if _pos_toggle else "未持有"
+
+    with _row1_btn:
+        try:
+            _btn_provider = st.session_state.ui_prefs.get("provider", "DeepSeek")
+            _btn_label = f"开始分析 · {_btn_provider}"
+        except Exception:
+            _btn_label = "开始分析"
+        _do_start = st.button(_btn_label, use_container_width=True, type="primary")
+
+    # ── 第二行：分析日期 · 分析师(checkbox) · 研究深度 ────────────────────────
+    _row2_date, _row2_ana, _row2_dep = st.columns([1.4, 3, 2.8])
+
+    with _row2_date:
+        st.markdown('<span class="ta-label">分析日期</span>', unsafe_allow_html=True)
+        analysis_date = st.date_input(
+            "分析日期", datetime.date.today(), max_value=datetime.date.today(),
+            label_visibility="collapsed",
+        ).strftime("%Y-%m-%d")
+
+    with _row2_ana:
+        _tmpl_data = None  # 模板功能已移除
+        st.markdown('<span class="ta-label">分析师</span>', unsafe_allow_html=True)
+        _ana_cols = st.columns(4)
+        _analyst_keys = list(analyst_options.keys())
+        selected_analyst_names = [
+            name for name, col in zip(_analyst_keys, _ana_cols)
+            if col.checkbox(name, value=True, key=f"ana_{name}")
+        ]
+        selected_analysts = [analyst_options[n] for n in selected_analyst_names]
+
+    with _row2_dep:
+        _depth_labels = ["极浅", "浅层", "中等", "深入"]
+        _depth_values = {"极浅": 0, "浅层": 1, "中等": 2, "深入": 3}
+        _saved_depth  = st.session_state.ui_prefs.get("research_depth", 2)
+        st.markdown('<span class="ta-label">研究深度</span>', unsafe_allow_html=True)
+        _depth_name = st.radio(
+            "研究深度", options=_depth_labels, index=_saved_depth,
+            horizontal=True, help="极浅=快速总结  浅层=1轮辩论  中等=2轮辩论  深入=3轮辩论",
+            label_visibility="collapsed",
+        )
+        selected_research_depth = _depth_values[_depth_name]
+        if selected_research_depth != _saved_depth:
+            update_pref("research_depth", selected_research_depth)
+
+    # ── 第三行：价格回溯 · 新闻回溯 ──────────────────────────────────────────
+    _row3_lb, _row3_nlb = st.columns(2)
+
+    with _row3_lb:
+        _saved_lookback = st.session_state.ui_prefs.get("lookback_days", 30)
+        selected_lookback_days = st.slider(
+            "价格回溯 (天)", min_value=5, max_value=120, value=_saved_lookback,
+            help="AI 分析技术指标时向前搜索的交易日范围。",
+        )
+        if selected_lookback_days != _saved_lookback:
+            update_pref("lookback_days", selected_lookback_days)
+
+    with _row3_nlb:
+        _saved_news_lb = st.session_state.ui_prefs.get("news_lookback_days", 7)
+        selected_news_lookback_days = st.slider(
+            "新闻回溯 (天)", min_value=1, max_value=30, value=_saved_news_lb,
+            help="AI 分析新闻和社交情绪时向前搜索的自然日范围。",
+        )
+        if selected_news_lookback_days != _saved_news_lb:
+            update_pref("news_lookback_days", selected_news_lookback_days)
+
+    # Checkpoint 提示
     if selected_ticker:
         try:
             from tradingagents.graph.checkpointer import has_checkpoint, checkpoint_step
             _data_cache = DEFAULT_CONFIG.get("data_cache_dir")
             if _data_cache and has_checkpoint(_data_cache, selected_ticker, analysis_date):
                 _step = checkpoint_step(_data_cache, selected_ticker, analysis_date)
-                st.info(
-                    f"💾 检测到 **{selected_ticker} · {analysis_date}** 的未完成分析（步骤 {_step}），"
-                    f"开启 `checkpoint_enabled` 后开始分析将自动续跑。"
-                )
+                st.caption(f"检测到未完成分析（步骤 {_step}），开启 checkpoint 后将自动续跑。")
         except Exception:
             pass
 
-    # 【修改】"开始分析" 前进行前置校验
-    if st.button("🚀 开始分析", use_container_width=True, type="primary"):
-        # 获取当前提供商对应的环境变量名
+    # ── 第四行：分析完成后显示下载链接 ───────────────────────────────────────
+    download_placeholder = st.empty()
+    if st.session_state.final_state:
+        pass  # 下载按钮由下方结果区域填充
+
+    if _do_start:
         target_env_var = env_key_map.get(selected_llm_provider_name.lower())
-        # 校验：输入框有填 OR 环境变量里有
         has_key = bool(input_api_key) or (target_env_var and os.environ.get(target_env_var))
-        
         if not selected_ticker:
             show_error_with_fix(
                 "请先输入股票代码",
                 fix_steps=[
-                    "在侧边栏 **请输入股票代码** 输入框填入 ticker，例如：`NVDA`、`AAPL`、`300990.SZ`、`600519.SS`、`0700.HK`。",
+                    "在上方 **股票代码** 输入框填入 ticker，例如：`NVDA`、`AAPL`、`300990.SZ`、`600519.SS`、`0700.HK`。",
                     "A 股标的会自动走中文数据源（东方财富 / 雪球 / 新浪 / akshare），美股 / 港股保持原有 Yahoo / StockTwits / Reddit 路径。",
                 ],
             )
         elif not has_key:
             show_error_with_fix(
                 f"缺少 {selected_llm_provider_name} 的 API Key",
-                detail=f"环境变量 `{target_env_var or '???'}` 为空，且 ⚙️ 配置 tab 也未填入。",
+                detail=f"环境变量 `{target_env_var or '???'}` 为空，且 配置 tab 也未填入。",
                 fix_steps=[
-                    "切到顶部 **⚙️ 配置** tab，在 *API Key* 输入框填入 Key。",
+                    "切到顶部 **配置** tab，在 *API Key* 输入框填入 Key。",
                     f"点击 **💾 保存 {selected_llm_provider_name} Key 到 .env**，下次启动自动加载。",
                     f"或在终端运行 `export {target_env_var}=sk-xxx` 后重启 Streamlit。",
                 ],
             )
         else:
             reset_state()
-            # 针对并发模式：一开始就把所有的分析师状态设成进行中
             for name in selected_analyst_names:
                 st.session_state.agent_status[name] = "in_progress"
             st.session_state.start_analysis = True
             st.session_state.has_position = has_position
-            st.rerun() # 立即重跑，进入分析逻辑
-        
-    st.sidebar.markdown("---")
-    st.sidebar.header("下载报告")
-    download_placeholder = st.sidebar.empty()
-    if not st.session_state.final_state:
-        download_placeholder.info("分析完成后，将在此处提供下载链接。")
+            st.rerun()
 
-    # 历史记录已迁移至顶部 "📚 历史分析" tab
+    st.divider()
 
-
-# --- 主布局与分析逻辑 ---
-
-# ---- 📈 分析中心 ----
-with tab_analyze:
-
+    # ── 结果区域（全宽）─────────────────────────────────────────────────────
     # 1. 分析进行中的视图
     if st.session_state.start_analysis and not st.session_state.final_state:
         progress_placeholder = st.empty()
         report_placeholder = st.empty()
-        messages_placeholder = st.empty()
 
         if not selected_analysts:
             show_error_with_fix(
                 "未选择任何分析师",
                 fix_steps=[
-                    "在侧边栏 **请选择分析师团队** 多选框里至少选一位。",
+                    "在左侧 **请选择分析师团队** 多选框里至少选一位。",
                     "通常 4 位全选（市场 / 舆情 / 新闻 / 基本面），决策最完整。",
                 ],
             )
@@ -1151,7 +1399,7 @@ with tab_analyze:
                 f"{selected_llm_provider_name} 缺少模型选择",
                 detail="快速思考引擎或深度思考引擎为空。",
                 fix_steps=[
-                    "切到顶部 **⚙️ 配置** tab。",
+                    "切到顶部 **配置** tab。",
                     "在 *快速思考引擎* 和 *深度思考引擎* 下拉框中各选一个模型。",
                     "推荐组合：快速 = `deepseek-v4-flash`、深度 = `deepseek-v4-pro`。",
                 ],
@@ -1191,30 +1439,37 @@ with tab_analyze:
 
             final_chunk_for_state = None
             # 启动计时
-            import time as _time
-            _stream_start_ts = _time.time()
+            _stream_start_ts = time.time()
             try:
                 for chunk in graph.graph.stream(init_agent_state, **args):
                     final_chunk_for_state = chunk
-                    # 检测当前阶段（基于 chunk 内容推断）
-                    _phase_key, _progress_pct = detect_current_phase(chunk)
-                    _elapsed = _time.time() - _stream_start_ts
 
-                    # 渲染 5 阶段 stepper（替代原来单一进度条）+ 已耗时
+                    # ── 先更新 agent 状态，再计算进度 ────────────────────────────
+                    if chunk.get("market_report"):      st.session_state.agent_status["市场分析师"] = "completed"
+                    if chunk.get("news_report"):        st.session_state.agent_status["新闻分析师"] = "completed"
+                    if chunk.get("sentiment_report"):   st.session_state.agent_status["舆情分析师"] = "completed"
+                    if chunk.get("fundamentals_report"):st.session_state.agent_status["基本面分析师"] = "completed"
+
+                    _analysts_done = sum(
+                        1 for n in selected_analyst_names
+                        if st.session_state.agent_status.get(n) == "completed"
+                    )
+                    _phase_key, _progress_pct = detect_current_phase(
+                        chunk,
+                        n_analysts=max(len(selected_analyst_names), 1),
+                        analysts_done=_analysts_done,
+                        max_debate=selected_research_depth,
+                    )
+                    _elapsed = time.time() - _stream_start_ts
+
+                    # 渲染里程碑进度条 + 实时计时器
                     with progress_placeholder.container():
-                        render_phase_stepper(_phase_key, elapsed_seconds=_elapsed)
-                        st.progress(_progress_pct, text=f"总进度 {_progress_pct}%")
+                        render_phase_stepper(_phase_key, elapsed_seconds=_elapsed, progress_pct=_progress_pct)
 
                     # 为下方的调试监控器预留一个循环内可更新的占位符（仅首次进入时有效）
                     if 'live_debug_placeholder' not in locals():
                         st.markdown("---")
                         live_debug_placeholder = st.empty()
-
-                    # 【并发补单】当流中出现 report 时，代表对应分析师已跑完并发 SubGraph
-                    if chunk.get("market_report"): st.session_state.agent_status["市场分析师"] = "completed"
-                    if chunk.get("news_report"): st.session_state.agent_status["新闻分析师"] = "completed"
-                    if chunk.get("sentiment_report"): st.session_state.agent_status["舆情分析师"] = "completed"
-                    if chunk.get("fundamentals_report"): st.session_state.agent_status["基本面分析师"] = "completed"
 
                     # Stage 6: 累积 token 使用统计
                     _accumulate_token_stats(chunk)
@@ -1249,8 +1504,6 @@ with tab_analyze:
 
                     # 用 tabs 展示每个代理的输出（点击切换为客户端行为，不会触发 streamlit rerun）
                     with report_placeholder.container():
-                        st.subheader("代理输出（点击上方 Tab 切换）")
-
                         # 按团队顺序排列 tab；只展示用户选中的分析师
                         _visible_agents = []
                         for _team, _agents in TEAMS_STRUCTURE.items():
@@ -1260,35 +1513,74 @@ with tab_analyze:
                                 _visible_agents.append(_agent)
 
                         if _visible_agents:
-                            # 在 tab 标签上直接展示状态图标，方便一眼看到每个代理的进度。
-                            _tab_labels = [
-                                f"{_status_icon_map.get(st.session_state.agent_status.get(_a, 'pending'), '⚪')} {_a}"
-                                for _a in _visible_agents
-                            ]
-                            _tab_objs = st.tabs(_tab_labels)
-                            for _tab, _agent in zip(_tab_objs, _visible_agents):
-                                with _tab:
-                                    _status = st.session_state.agent_status.get(_agent, "pending")
-                                    _icon = _status_icon_map.get(_status, "⚪")
-                                    _label = _status_label_map.get(_status, _status)
-                                    st.caption(f"{_icon} 当前状态：**{_label}**")
-                                    _report = st.session_state.agent_reports.get(_agent)
-                                    if _report:
-                                        st.markdown(_report, unsafe_allow_html=True)
-                                    else:
-                                        if _status == "in_progress":
-                                            st.info(f"⏳ {_agent} 正在执行中，预计很快有内容...")
-                                        else:
-                                            st.info(f"⏸️ {_agent} 尚未开始执行")
+                            # 自包含 JS 竖向 tab 组件 — 纯客户端切换，不触发 Streamlit rerun
+                            # tab 选中状态通过 localStorage 在 chunk 重渲染间持久化
+                            _agents_data = []
+                            for _a in _visible_agents:
+                                _s = st.session_state.agent_status.get(_a, "pending")
+                                _ico = _status_icon_map.get(_s, "⚪")
+                                _lbl = _status_label_map.get(_s, _s)
+                                _rpt = st.session_state.agent_reports.get(_a, "")
+                                _rpt_html = markdown2.markdown(_rpt, extras=["tables","fenced-code-blocks"]) if _rpt else ""
+                                _agents_data.append({
+                                    "name": _a, "icon": _ico, "label": _lbl,
+                                    "html": _rpt_html, "status": _s,
+                                })
+                            _agents_json = json.dumps(_agents_data, ensure_ascii=False)
 
-                    with messages_placeholder.container():
-                        st.subheader("消息与工具日志");
-                        if "messages" in chunk and chunk["messages"]:
-                            last_message = chunk["messages"][-1]; content_str = str(last_message.content) if hasattr(last_message, 'content') else ''
-                            if content_str: st.session_state.messages.append(f"**思考:** {content_str[:200]}...")
-                            if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                                for tc in last_message.tool_calls: st.session_state.messages.append(f"**🛠️ 工具调用:** `{tc.get('name', 'N/A')}`")
-                        st.markdown("\n\n".join(st.session_state.messages[-10:]))
+                            _tab_component = f"""
+<style>
+body{{margin:0;background:transparent;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:rgba(255,255,255,0.9);}}
+.wrap{{display:flex;gap:0;min-height:120px;}}
+.nav{{width:148px;flex-shrink:0;padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);}}
+.ni{{padding:6px 10px;margin-bottom:3px;border-radius:6px;font-size:13px;cursor:pointer;
+     border-left:3px solid transparent;color:rgba(255,255,255,0.5);user-select:none;transition:all .15s;}}
+.ni:hover{{color:rgba(255,255,255,0.8);background:rgba(255,255,255,0.05);}}
+.ni.active{{background:rgba(255,255,255,0.09);border-left-color:#fff;color:#fff;font-weight:600;}}
+.content{{flex:1;padding-left:16px;overflow:auto;max-height:600px;}}
+.panel{{display:none;font-size:13.5px;line-height:1.75;}}
+.panel.active{{display:block;}}
+.panel p{{margin:.4em 0;}}
+.panel h1,.panel h2,.panel h3{{color:#fff;margin:.9em 0 .3em;font-weight:600;}}
+.panel table{{border-collapse:collapse;width:100%;margin:.5em 0;}}
+.panel th,.panel td{{border:1px solid rgba(255,255,255,0.13);padding:5px 10px;}}
+.panel th{{background:rgba(255,255,255,0.07);}}
+.panel code{{background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;font-size:12px;}}
+.status-lbl{{font-size:11.5px;color:rgba(255,255,255,0.42);margin-bottom:10px;}}
+.placeholder{{color:rgba(255,255,255,0.35);font-size:13px;padding:12px 0;}}
+</style>
+<div class="wrap">
+  <div class="nav" id="nav"></div>
+  <div class="content" id="content"></div>
+</div>
+<script>
+var agents={_agents_json};
+var LS_KEY='ta_agent_tab';
+var cur=Math.min(parseInt(localStorage.getItem(LS_KEY)||'0'),agents.length-1);
+function render(){{
+  var nav=document.getElementById('nav');
+  var cnt=document.getElementById('content');
+  nav.innerHTML=''; cnt.innerHTML='';
+  agents.forEach(function(a,i){{
+    var d=document.createElement('div');
+    d.className='ni'+(i===cur?' active':'');
+    d.textContent=a.icon+' '+a.name;
+    d.onclick=(function(idx){{return function(){{cur=idx;localStorage.setItem(LS_KEY,idx);render();}}}})(i);
+    nav.appendChild(d);
+    var p=document.createElement('div');
+    p.className='panel'+(i===cur?' active':'');
+    var body='<div class="status-lbl">'+a.icon+' '+a.name+' · '+a.label+'</div>';
+    if(a.html){{body+=a.html;}}
+    else if(a.status==='in_progress'){{body+='<div class="placeholder">⏳ 正在执行中，预计很快有内容…</div>';}}
+    else{{body+='<div class="placeholder">⏸️ 尚未开始执行</div>';}}
+    p.innerHTML=body;
+    cnt.appendChild(p);
+  }});
+}}
+render();
+</script>
+"""
+                            _st_components.html(_tab_component, height=640, scrolling=False)
 
                     # 右列已在 status_placeholder 内通过 st.tabs 展示每个代理的输出，
                     # 这里不再调用 display_live_report，避免与左列重复渲染同一份内容。
@@ -1315,7 +1607,7 @@ with tab_analyze:
                 # 智能识别错误类型并给出有针对性的建议
                 if "401" in _err or "unauthorized" in _low_err or "api key" in _low_err:
                     _fix_steps = [
-                        "前往 ⚙️ 配置 tab，确认 API Key 已正确填入并保存。",
+                        "前往 配置 tab，确认 API Key 已正确填入并保存。",
                         "在终端运行 `echo $DEEPSEEK_API_KEY` 确认环境变量也有值。",
                         "如果 key 是新申请的，等几分钟让 DeepSeek 后台同步。",
                     ]
@@ -1333,7 +1625,7 @@ with tab_analyze:
                 elif "structured-output" in _low_err or "nonetype" in _low_err:
                     _fix_steps = [
                         "可能是模型不稳定地未返回结构化输出。自动回退到 free-text 应能恢复。",
-                        "如反复出现，前往 ⚙️ 配置 tab 把模型切换到 `deepseek-v4-pro`（结构化输出更稳）。",
+                        "如反复出现，前往 配置 tab 把模型切换到 `deepseek-v4-pro`（结构化输出更稳）。",
                     ]
                 elif "valueerror" in _low_err and ("indicator" in _low_err or "ticker" in _low_err):
                     _fix_steps = [
@@ -1343,7 +1635,7 @@ with tab_analyze:
                 else:
                     _fix_steps = [
                         "展开下方『完整错误堆栈』查看具体出错位置。",
-                        "前往 🏥 诊断 tab 检查依赖是否都正常。",
+                        "前往 诊断 tab 检查依赖是否都正常。",
                         "如果反复出现，重启 Streamlit 后重试。",
                     ]
 
@@ -1377,7 +1669,7 @@ with tab_analyze:
         _ts = st.session_state.token_stats
         _fs = _format_token_stats(_ts, model=deep_thinker or "")
         with st.container(border=True):
-            st.markdown("### 🔍 本次分析透明度")
+            st.markdown("### 本次分析透明度")
             _m_cols = st.columns(5)
             _m_cols[0].metric("输入 tokens", _fs["输入 tokens"])
             _m_cols[1].metric("输出 tokens", _fs["输出 tokens"])
@@ -1454,23 +1746,40 @@ with tab_analyze:
 
         if st.session_state.show_live_report_view:
             with st.container(border=True):
-                st.header("🕰️ 实时分析过程回顾")
+                st.header("实时分析过程回顾")
                 display_full_process_review(final_state)
                 st.markdown("---")
 
-        st.header("📄 完整分析报告")
-        report_expanders = { "第一阶段：分析师团队报告": any(final_state.get(key) for key in ["market_report", "news_report", "sentiment_report", "fundamentals_report"]), "第二阶段：研究团队决策": bool(final_state.get("investment_plan")), "第三阶段：交易团队计划": bool(final_state.get("trader_investment_plan")), "第四/五阶段：风险管理与最终决策": bool(final_state.get("final_trade_decision")), }
-        with st.expander("第一阶段：分析师团队报告", expanded=report_expanders["第一阶段：分析师团队报告"]):
-            if final_state.get("market_report"): st.subheader("市场分析报告"); st.markdown(final_state["market_report"], unsafe_allow_html=True)
-            if final_state.get("news_report"): st.subheader("新闻分析报告"); st.markdown(final_state["news_report"], unsafe_allow_html=True)
-            if final_state.get("sentiment_report"): st.subheader("社交情绪报告"); st.markdown(final_state["sentiment_report"], unsafe_allow_html=True)
-            if final_state.get("fundamentals_report"): st.subheader("基本面分析报告"); st.markdown(final_state["fundamentals_report"], unsafe_allow_html=True)
-        if report_expanders["第二阶段：研究团队决策"]:
-            with st.expander("第二阶段：研究团队决策", expanded=True): st.markdown(final_state["investment_plan"], unsafe_allow_html=True)
-        if report_expanders["第三阶段：交易团队计划"]:
-            with st.expander("第三阶段：交易团队计划", expanded=True): st.markdown(final_state["trader_investment_plan"], unsafe_allow_html=True)
-        if report_expanders["第四/五阶段：风险管理与最终决策"]:
-            with st.expander("第四/五阶段：风险管理与最终决策", expanded=True): st.markdown(final_state["final_trade_decision"], unsafe_allow_html=True)
+        st.header("完整分析报告")
+
+        # 分析师报告：左侧竖向 tab 导航（纯 CSS + st.tabs 内容，不会重启流）
+        _fs_analyst_reports = [
+            ("market_report", "市场分析"),
+            ("news_report", "新闻分析"),
+            ("sentiment_report", "情绪分析"),
+            ("fundamentals_report", "基本面"),
+        ]
+        _fs_avail = [(k, t) for k, t in _fs_analyst_reports if final_state.get(k)]
+        if _fs_avail:
+            _fs_nav_col, _fs_content_col = st.columns([1, 4])
+            with _fs_nav_col:
+                _fs_sel = st.radio(
+                    "分析师报告", options=[t for _, t in _fs_avail],
+                    label_visibility="collapsed", key="fs_analyst_nav",
+                )
+            with _fs_content_col:
+                _fs_key = {t: k for k, t in _fs_avail}[_fs_sel]
+                st.markdown(final_state[_fs_key], unsafe_allow_html=True)
+
+        if final_state.get("investment_plan"):
+            with st.expander("研究团队决策", expanded=True):
+                st.markdown(final_state["investment_plan"], unsafe_allow_html=True)
+        if final_state.get("trader_investment_plan"):
+            with st.expander("交易团队计划", expanded=True):
+                st.markdown(final_state["trader_investment_plan"], unsafe_allow_html=True)
+        if final_state.get("final_trade_decision"):
+            with st.expander("风险管理与最终决策", expanded=True):
+                st.markdown(final_state["final_trade_decision"], unsafe_allow_html=True)
 
         # 【修改：增强版下载按钮逻辑】
         pdf_data = st.session_state.get('pdf_data')
@@ -1530,61 +1839,20 @@ with tab_analyze:
         else:
             download_placeholder.info("分析完成后，将在此处提供下载链接。")
 
-    # 3. 初始欢迎屏幕（Stage 4：友好引导 + 最近 6 次分析 quick-access）
+    # 3. 空闲状态（欢迎引导已移至浮层，历史记录见「历史分析」tab）
     else:
-        with st.container(border=True):
-            st.markdown("### 👋 欢迎使用 TradingAgents")
-            st.markdown(
-                "本框架编排 **12 个 AI 代理**（4 分析师 + 3 研究 + 1 交易员 + 4 风险）"
-                "在虚拟会议室里就一个标的进行**辩论 + 投票 + 最终决策**。"
-            )
-            st.markdown(
-                "**🚀 三步开始：**\n\n"
-                "1. 在左侧侧边栏输入 **股票代码**（例如 `NVDA`、`300990.SZ`、`0700.HK`）\n"
-                "2. 选择 **分析师团队**、**研究深度**、**回溯窗口** 和 **是否持有仓位**\n"
-                "3. 点击 **🚀 开始分析** 按钮，然后回到这个 tab 看实时进展"
-            )
-            st.markdown(
-                "**🆘 第一次使用？** 先去 **🏥 诊断** tab 看看依赖是否都就绪；"
-                "再去 **⚙️ 配置** tab 选好 LLM 提供商和模型。"
-            )
-
-        # 最近 6 次分析快捷入口
-        _recent = load_historical_analyses_cached(str(RESULTS_DIR))
-        if _recent:
-            st.markdown("---")
-            st.markdown("### 📚 最近的分析（点击直接打开）")
-            _flat = []
-            for _t, _runs in _recent.items():
-                for _r in _runs[:3]:  # 每个 ticker 最近 3 次
-                    _flat.append({"ticker": _t, **_r})
-            _flat.sort(key=lambda x: x["date"], reverse=True)
-            _flat = _flat[:6]
-
-            _cols = st.columns(3)
-            for _i, _item in enumerate(_flat):
-                with _cols[_i % 3]:
-                    with st.container(border=True):
-                        st.markdown(f"**{_item['ticker']}**")
-                        st.caption(f"📅 {_item['date']}")
-                        st.button(
-                            "📂 查看报告",
-                            key=f"recent_{_item['ticker']}_{_item['date']}",
-                            on_click=load_selected_analysis,
-                            args=(_item['json_path'],),
-                            use_container_width=True,
-                        )
+        pass
 
 
 # ---- 📚 历史分析 ----
 with tab_history:
-    st.subheader("📚 历史分析记录")
+    st.subheader("历史分析记录")
     st.caption(f"当前存储目录：`{RESULTS_DIR}`")
 
     # 累计统计总览（覆盖所有历史分析）
     _cum = _load_cumulative_stats(RESULTS_DIR)
     with st.container(border=True):
-        st.markdown("### 📊 累计统计（所有分析）")
+        st.markdown("### 累计统计（所有分析）")
         _cum_cols = st.columns(5)
         _cum_cols[0].metric("输入 tokens", f"{_cum['input_tokens']:,}")
         _cum_cols[1].metric("输出 tokens", f"{_cum['output_tokens']:,}")
@@ -1617,8 +1885,10 @@ with tab_history:
             f"**{_total_runs}** 次历史分析"
         )
         if _db_stats["by_rating"]:
+            _rating_cn = {"Buy": "买入", "Overweight": "增持", "Hold": "持有",
+                          "Underweight": "减持", "Sell": "卖出", "Unknown": "未知"}
             _rating_chips = " · ".join(
-                f"{r}：**{c}**" for r, c in _db_stats["by_rating"].items()
+                f"{_rating_cn.get(r, r)}：**{c}**" for r, c in _db_stats["by_rating"].items()
             )
             st.caption(f"评级分布：{_rating_chips}")
 
@@ -1701,7 +1971,7 @@ with tab_history:
         elif _view_mode == "A/B 对比":
             # === A/B 对比视图：选两份分析左右对照 ===
             st.markdown("---")
-            st.markdown("### 🔬 A/B 对比")
+            st.markdown("### A/B 对比")
             st.caption("选择两份分析进行左右对照，便于观察同一标的不同时间，或不同标的同期。")
 
             # 构造所有可选项
@@ -1747,7 +2017,7 @@ with tab_history:
                                           (_b_data, _b_label, _diff_col2)]:
                 with _col:
                     with st.container(border=True):
-                        st.markdown(f"### 📊 {_label}")
+                        st.markdown(f"### {_label}")
                         for _key, _title in [
                             ("market_report", "市场分析"),
                             ("news_report", "新闻分析"),
@@ -1764,7 +2034,7 @@ with tab_history:
                                     st.markdown(_content, unsafe_allow_html=True)
         else:
             # === 卡片网格视图（默认）===
-            _cols_per_row = 3
+            _cols_per_row = 5
             _ticker_rows = [
                 _sorted_tickers[i:i + _cols_per_row]
                 for i in range(0, len(_sorted_tickers), _cols_per_row)
@@ -1803,11 +2073,11 @@ with tab_history:
                                             use_container_width=True,
                                         )
 
-# ---- 🏥 诊断 ----
+# ---- 诊断 ----
 with tab_diagnostic:
     _h_col1, _h_col2 = st.columns([4, 1])
     with _h_col1:
-        st.header("🏥 系统健康检查")
+        st.header("系统健康检查")
         st.caption("检测各项依赖是否就绪。建议每次启动后看一眼，避免分析跑到一半才发现缺组件。结果默认缓存 5 分钟。")
     with _h_col2:
         st.write("")  # 垂直对齐
@@ -1830,7 +2100,7 @@ with tab_diagnostic:
             else "已在『配置』tab 输入并保存" if input_api_key
             else f"❌ 未在『配置』tab 输入，也未在 .env 中设置 `{_env_var}`"
         ),
-        "fix": "前往 ⚙️ 配置 tab 填入 API Key，并点击 💾 保存到 .env" if not _has_key else None,
+        "fix": "前往 配置 tab 填入 API Key，并点击 保存到 .env" if not _has_key else None,
     })
 
     # 2-4) 依赖检查通过 cache_data 缓存，避免每次 rerun 都重新 import akshare/playwright
@@ -1894,7 +2164,7 @@ with tab_diagnostic:
         "name": "结果存储目录",
         "ok": _dir_ok,
         "detail": _dir_detail,
-        "fix": "前往 ⚙️ 配置 tab 选择一个可写的目录" if not _dir_ok else None,
+        "fix": "前往 配置 tab 选择一个可写的目录" if not _dir_ok else None,
     })
 
     # 6) 当前选中模型 是否在已知 capability table
@@ -1906,7 +2176,7 @@ with tab_diagnostic:
             f"快速：`{shallow_thinker}`  ·  深度：`{deep_thinker}`"
             if _model_ok else "❌ 未在『配置』tab 选择模型"
         ),
-        "fix": "前往 ⚙️ 配置 tab 选择 快速思考引擎 和 深度思考引擎" if not _model_ok else None,
+        "fix": "前往 配置 tab 选择 快速思考引擎 和 深度思考引擎" if not _model_ok else None,
     })
 
     # 渲染检查结果
@@ -1920,20 +2190,13 @@ with tab_diagnostic:
     else:
         st.error(f"❌ {_ok_count}/{_total} 项通过，请先修复以下问题再开始分析")
 
-    for _r in _diag_results:
+    _diag_cols = st.columns(3)
+    for _i, _r in enumerate(_diag_results):
         _icon = "✅" if _r["ok"] else "❌"
-        with st.container(border=True):
-            st.markdown(f"### {_icon} {_r['name']}")
-            st.write(_r["detail"])
-            if _r.get("fix"):
-                st.info(f"📌 **修复建议：** {_r['fix']}")
+        with _diag_cols[_i % 3]:
+            with st.container(border=True):
+                st.markdown(f"**{_icon} {_r['name']}**")
+                st.caption(_r["detail"])
+                if _r.get("fix"):
+                    st.info(f"**修复建议：** {_r['fix']}")
 
-# --- 底部全局调试监控器 ---
-st.markdown("---")
-with st.expander("🛠️ 调试监控器 (精简版)", expanded=st.session_state.get("start_analysis", False)):
-    if "last_chunk_raw" in st.session_state:
-        status_color = "red" if st.session_state.last_chunk_raw.get("异常中断", "无") != "无" else "green"
-        st.markdown(f"**当前执行节点:** `{st.session_state.last_chunk_raw.get('当前执行节点', '正在启动...')}`")
-        st.markdown(f"**系统异常:** :{status_color}[{st.session_state.last_chunk_raw.get('异常中断', '无')}]")
-    else:
-        st.info("休眠中，等待分析指令...")
