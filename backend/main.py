@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.deps import settings_singleton
+from backend.deps import get_settings_dep
 from backend.routes import health
 
 
 def create_app() -> FastAPI:
-    settings = settings_singleton()
+    settings = get_settings_dep()
     app = FastAPI(title="TradingAgents Backend", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,

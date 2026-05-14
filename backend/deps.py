@@ -4,7 +4,7 @@ from backend.config import Settings, get_settings
 from backend.services.registry import RunRegistry
 
 
-def settings_singleton() -> Settings:
+def get_settings_dep() -> Settings:
     return get_settings()
 
 
