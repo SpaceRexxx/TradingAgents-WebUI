@@ -218,6 +218,7 @@ __marimo__/
 # Cache
 **/data_cache/
 .env
+.DS_Store
 
 # TradingAgents Analysis Results (Privacy)
 results/
@@ -228,3 +229,7 @@ eval_results/
 *.pdf
 # 缓存临时文件
 *.log
+
+# Local leftovers from newer UI experiments
+frontend/
+backend/
