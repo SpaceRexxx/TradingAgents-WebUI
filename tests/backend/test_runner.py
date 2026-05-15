@@ -76,7 +76,16 @@ async def test_graph_exception_marks_run_as_error():
 @pytest.mark.asyncio
 async def test_abort_drains_chunks_before_aborted_event():
     """On abort, every chunk emitted before cancellation must appear in the
-    queue BEFORE the 'aborted' terminal event."""
+    queue BEFORE the 'aborted' terminal event.
+
+    NOTE: this test passes with OR without the _drain() fix because the fake
+    graph is fully synchronous — all run_coroutine_threadsafe puts are
+    serviced by the loop before `await asyncio.to_thread(...)` returns, so no
+    real ordering gap exists in-process. The race only manifests with a
+    genuine async engine that yields between chunks. The test documents the
+    intended ordering invariant and guards against a regression that removes
+    the _drain() calls AND breaks queue ordering by other means.
+    """
     registry = RunRegistry()
 
     class _SlowCancelGraph:
