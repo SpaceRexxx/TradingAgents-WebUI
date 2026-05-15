@@ -55,3 +55,16 @@ def test_set_key_for_keyless_provider_returns_400(env_file):
     with _client() as client:
         resp = client.post("/api/providers/ollama/key", json={"api_key": "x"})
         assert resp.status_code == 400
+
+
+def test_set_key_rejects_newline_injection(env_file):
+    # A key containing a newline must be rejected (422) so it cannot inject
+    # a second KEY=value line into the .env file.
+    with _client() as client:
+        resp = client.post(
+            "/api/providers/deepseek/key",
+            json={"api_key": "good\nARK_API_KEY=evil"},
+        )
+        assert resp.status_code == 422
+    # .env must NOT have gained an ARK_API_KEY line.
+    assert "ARK_API_KEY=evil" not in env_file.read_text()

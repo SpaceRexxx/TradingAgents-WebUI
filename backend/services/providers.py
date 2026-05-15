@@ -20,6 +20,8 @@ _BASE_URL: dict[str, str | None] = {
     "openrouter": "https://openrouter.ai/api/v1",
     "azure": None,
     "ollama": "http://localhost:11434/v1",
+    # Volcengine Ark OpenAI-compatible inference endpoint.
+    "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
 }
 
 

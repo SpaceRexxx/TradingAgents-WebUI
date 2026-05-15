@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class StartAnalysisRequest(BaseModel):
@@ -34,6 +34,15 @@ class ProviderListResponse(BaseModel):
 
 class SetKeyRequest(BaseModel):
     api_key: str = Field(..., min_length=1)
+
+    @field_validator("api_key")
+    @classmethod
+    def _no_newlines(cls, v: str) -> str:
+        # Prevent .env injection: a key containing a newline would write a
+        # second attacker-controlled KEY=value line into the .env file.
+        if "\n" in v or "\r" in v:
+            raise ValueError("API key must not contain newline characters")
+        return v
 
 
 class SetKeyResponse(BaseModel):
