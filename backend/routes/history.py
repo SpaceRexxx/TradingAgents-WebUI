@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.deps import get_settings_dep
+from backend.schemas import DiffResponse
+from backend.services import diff as diff_service
 from backend.services import history as history_service
 
 router = APIRouter(prefix="/api/history", tags=["history"])
@@ -42,3 +44,23 @@ def patch_history(ticker: str, trade_date: str, body: PatchHistoryRequest) -> di
                 detail=f"No indexed analysis for {ticker} {trade_date}",
             )
     return {"ticker": ticker, "trade_date": trade_date, "updated": True}
+
+
+@router.get(
+    "/{ticker}/{trade_date}/diff/{other_ticker}/{other_trade_date}",
+    response_model=DiffResponse,
+)
+def diff_history(
+    ticker: str,
+    trade_date: str,
+    other_ticker: str,
+    other_trade_date: str,
+) -> DiffResponse:
+    settings = get_settings_dep()
+    try:
+        result = diff_service.diff_analyses(
+            settings.results_dir, ticker, trade_date, other_ticker, other_trade_date
+        )
+    except diff_service.AnalysisNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return DiffResponse(**result)

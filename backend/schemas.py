@@ -55,3 +55,19 @@ class TestProviderResponse(BaseModel):
     ok: bool
     reason: str
     status: int | None = None
+
+
+class DiffSide(BaseModel):
+    ticker: str
+    trade_date: str
+
+
+class DiffSection(BaseModel):
+    changed: bool
+    diff: str
+
+
+class DiffResponse(BaseModel):
+    a: DiffSide
+    b: DiffSide
+    sections: dict[str, DiffSection]
