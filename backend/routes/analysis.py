@@ -38,7 +38,7 @@ async def abort(
     if handle is None:
         raise HTTPException(status_code=404, detail="run_id not found")
     handle.cancel_event.set()
-    return AbortResponse(run_id=run_id, status=handle.status.value)
+    return AbortResponse(run_id=run_id, accepted=True)
 
 
 @router.websocket("/ws/{run_id}")
@@ -66,6 +66,8 @@ async def stream(websocket: WebSocket, run_id: str) -> None:
                 payload["message"] = handle.error
             await websocket.send_text(json.dumps(payload, default=str))
         await websocket.close()
+        # Evict now that all buffered events are flushed; safe because we are
+        # inside the is_terminal() guard. Mirrors the finally-block eviction.
         registry.drop(run_id)
         return
 

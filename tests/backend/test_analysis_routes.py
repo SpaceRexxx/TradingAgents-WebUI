@@ -115,6 +115,8 @@ def test_abort_transitions_run_to_aborted(monkeypatch):
 
         abort = client.post(f"/api/analysis/{run_id}/abort")
         assert abort.status_code == 200
+        body = abort.json()
+        assert body == {"run_id": run_id, "accepted": True}
 
         with client.websocket_connect(f"/api/analysis/ws/{run_id}") as ws:
             for _ in range(500):
@@ -171,3 +173,9 @@ def test_websocket_after_run_terminal_returns_immediately(app_with_fake_graph):
             assert exc.code == 4404
         elapsed = time.monotonic() - start
         assert elapsed < 5.0
+
+
+def test_abort_unknown_run_id_returns_404(app_with_fake_graph):
+    with TestClient(app_with_fake_graph) as client:
+        resp = client.post("/api/analysis/NOPE/abort")
+        assert resp.status_code == 404

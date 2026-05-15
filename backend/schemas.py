@@ -17,4 +17,4 @@ class StartAnalysisResponse(BaseModel):
 
 class AbortResponse(BaseModel):
     run_id: str
-    status: str
+    accepted: bool
