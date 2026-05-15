@@ -28,11 +28,11 @@ API keys are **not** managed by this layer in Step 1a. The engine still reads th
 | GET | `/api/health` | `{"status":"ok"}` |
 | POST | `/api/analysis/start` | Body: `{ticker, trade_date, config_overrides}`. Returns `{run_id}` |
 | WS | `/api/analysis/ws/{run_id}` | Streams JSON events — types: `status`, `chunk`, `done`, `aborted`, `error`, `ping` |
-| POST | `/api/analysis/{run_id}/abort` | Signals cancel; terminal event appears on the WS shortly after |
+| POST | `/api/analysis/{run_id}/abort` | Returns `{run_id, accepted}`; 404 if run unknown. Terminal `aborted` event appears on the WS shortly after |
 | GET | `/api/history?ticker=` | List indexed analyses |
-| PATCH | `/api/history/{ticker}/{trade_date}` | Body: `{note?, rating?}` — updates the user-supplied fields |
+| PATCH | `/api/history/{ticker}/{trade_date}` | Body: `{note?, rating?}`. 404 if no analysis indexed for that ticker/date when setting `rating` |
 
-Endpoints deferred to **Step 1a.5**: `/api/providers/*`, `/api/diagnostics/*`, `/api/runs/{id}/pdf`, `/api/history/{id}/diff/{otherId}`.
+Endpoints deferred to **Step 1a.6**: `/api/providers/*`, `/api/diagnostics/*`, `/api/runs/{id}/pdf`, `/api/history/{id}/diff/{otherId}`.
 
 ## Event payloads on `/api/analysis/ws/{run_id}`
 
@@ -55,18 +55,21 @@ All backend tests use an in-memory fake graph and a temp results directory — n
 
 For a real end-to-end smoke test against the live engine, see Task 7 in `docs/superpowers/plans/2026-05-14-step1-fastapi-backend.md`.
 
-## Known limitations (to address before Step 1b)
+## Resolved in Step 1a.5
 
-Step 1a is intentionally scoped to "streaming spine + history read." Surfaced by the real-LLM smoke test and the final architectural review:
+The 6 limitations the Step 1a review flagged are now fixed:
 
-1. **Backend-initiated runs are not auto-indexed.** The engine's `_log_state` writes to `{ticker}/TradingAgentsStrategy_logs/full_states_log_{date}.json`. `rebuild_from_disk` indexes `{ticker}/{date}/final_state_report.json` — which is produced by `webapp.py:save_analysis_results`, not the engine. Until Step 1b ports `save_analysis_results` into the backend, new API-initiated runs won't appear in `GET /api/history`.
-2. **WS connect after a run is terminal hangs for 30 s.** The handler blocks on the empty queue until ping. There's no `is_terminal()` fast-path that replays the final state for late subscribers.
-3. **Chunk-drain ordering only enforced on success.** On `aborted`/`error`, stragglers from `run_coroutine_threadsafe` can land after the terminal event. Window is tiny in practice (queue puts are near-instant) but real.
-4. **`RunRegistry` has no eviction.** Completed handles stay in memory for the life of the process. Fine for local dev; add TTL/`drop()` before any shared deployment.
-5. **`AbortResponse.status` reflects state at signal time, not after honored.** Cancel is async; the field is almost always `"running"`. Either drop it or rename it.
-6. **History `set_rating` UPDATE matches zero rows silently** when the ticker/date isn't indexed — returns 200 with no DB change. Add a rowcount check + 404 before any production use.
+1. ✅ Backend runs persist `{ticker}/{date}/final_state_report.json` and are indexed (`backend/services/persistence.py`, called from the runner's success path before `mark_done`). Uses the engine's actual `results_dir` (`graph.config["results_dir"]`), not `Settings.results_dir`.
+2. ✅ WS connect after a terminal run drains any buffered events then emits a synthetic terminal event immediately — no 30s hang. Fast-path returns before the `try:` so it never triggers eviction.
+3. ✅ A `_drain()` helper runs before *every* terminal event (success/abort/error), so chunks never arrive after the terminal marker.
+4. ✅ `RunRegistry` evicts terminal handles once their WS consumer finishes (both the fast-path and the live-loop `finally`, guarded by `is_terminal()`).
+5. ✅ `POST /abort` returns `{run_id, accepted: true}` instead of a misleading `status` that was almost always `"running"`.
+6. ✅ `PATCH /api/history/{ticker}/{trade_date}` returns 404 when no analysis is indexed for that ticker/date (`set_rating` now returns rows-affected).
 
-None of these affect the engineering claim "Step 1a streaming + history works"; all are well-understood and tracked.
+**Residual (acknowledged, out of Step 1a.5 scope):** a run whose WebSocket is *never* connected by any client leaks its `RunHandle` for the process lifetime — eviction is WS-driven and there is no background reaper. Acceptable under the single-user local-dev model; revisit if the backend is ever multi-tenant or long-lived. Also: a PATCH carrying both `note` and `rating` for an unknown target silently no-ops the note but 404s on the rating (`set_note` was not in scope for the rows-affected change).
+
+Still deferred to **Step 1a.6**: `/api/providers/*`, `/api/diagnostics/*`, `GET /api/runs/{id}/pdf`, `GET /api/history/{id}/diff/{otherId}`.
+Still deferred to **Step 1b**: `webapp.py` → API-client migration.
 
 ## Rollback
 
