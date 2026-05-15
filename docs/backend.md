@@ -19,9 +19,9 @@ Environment variables (all prefixed `TRADINGAGENTS_`):
 | `TRADINGAGENTS_RESULTS_DIR` | `~/Desktop/Stock` | Where analysis results + `analyses.sqlite` live |
 | `TRADINGAGENTS_CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | Origins allowed by CORS. **Must be a JSON array literal** when set via env (pydantic-settings parses `list[str]` as JSON, not comma-separated). |
 
-API keys are **not** managed by this layer in Step 1a. The engine still reads them from `.env` / `.ui_prefs.json` the same way `webapp.py` does today. A future `/api/providers/*` route (Step 1a.5) will manage keys explicitly with redaction.
+API keys are managed by `/api/providers/{id}/key` (Step 1a.6): the key is written to `.env` + `os.environ` and is **never returned in any response or log**. `GET /api/providers` reports only `configured: bool`.
 
-## Endpoints (Step 1a)
+## Endpoints
 
 | Method | Path | Notes |
 |---|---|---|
@@ -31,8 +31,17 @@ API keys are **not** managed by this layer in Step 1a. The engine still reads th
 | POST | `/api/analysis/{run_id}/abort` | Returns `{run_id, accepted}`; 404 if run unknown. Terminal `aborted` event appears on the WS shortly after |
 | GET | `/api/history?ticker=` | List indexed analyses |
 | PATCH | `/api/history/{ticker}/{trade_date}` | Body: `{note?, rating?}`. 404 if no analysis indexed for that ticker/date when setting `rating` |
+| GET | `/api/history/{ticker}/{trade_date}/diff/{other_ticker}/{other_trade_date}` | Per-section unified diff of two analyses. 404 if either side missing |
+| GET | `/api/diagnostics` | `{degraded: string[], checked_at}` data-source health |
+| POST | `/api/diagnostics/run` | Re-check; same shape as GET |
+| GET | `/api/providers` | List providers with `configured` (never the key value) |
+| POST | `/api/providers/{id}/key` | Body `{api_key}`. Writes `.env` + `os.environ`. Returns `{id, configured}`. 404 unknown, 400 keyless, 422 if key contains a newline |
+| POST | `/api/providers/{id}/test` | Reachability probe of `{base_url}/models`. `{id, ok, reason, status?}` |
+| GET | `/api/runs/{ticker}/{trade_date}/pdf` | Streams `application/pdf`. 404 if not indexed |
 
-Endpoints deferred to **Step 1a.6**: `/api/providers/*`, `/api/diagnostics/*`, `/api/runs/{id}/pdf`, `/api/history/{id}/diff/{otherId}`.
+Path-identity note: the original spec wrote `/api/runs/{id}/pdf` and `.../diff/{otherId}` with opaque ids, but indexed history is keyed by `(ticker, trade_date)` — the routes use those segments instead.
+
+All originally-deferred endpoints are now implemented. Remaining work: **Step 1b** — `webapp.py` → API-client migration.
 
 ## Event payloads on `/api/analysis/ws/{run_id}`
 
@@ -72,7 +81,7 @@ The 6 limitations the Step 1a review flagged are now fixed:
 - A PATCH carrying both `note` and `rating` for an unknown target silently no-ops the note but 404s on the rating (`set_note` was not in scope for the rows-affected change).
 - **Results-dir divergence (Step 1b must address):** `persist_run` writes to the engine's `graph.config["results_dir"]`, but `GET /api/history` reads from `Settings.results_dir` (`TRADINGAGENTS_RESULTS_DIR`, default `~/Desktop/Stock`). If these differ, a run persists to disk but never appears in history. Normally identical; Step 1b's config consolidation should make the backend pass an explicit `results_dir` through so the write and read paths cannot diverge.
 
-Still deferred to **Step 1a.6**: `/api/providers/*`, `/api/diagnostics/*`, `GET /api/runs/{id}/pdf`, `GET /api/history/{id}/diff/{otherId}`.
+Step 1a.6 (providers / diagnostics / pdf / diff endpoints) is now **complete** — see the Endpoints table above.
 Still deferred to **Step 1b**: `webapp.py` → API-client migration.
 
 ## Rollback
