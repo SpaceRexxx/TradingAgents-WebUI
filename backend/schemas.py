@@ -18,3 +18,24 @@ class StartAnalysisResponse(BaseModel):
 class AbortResponse(BaseModel):
     run_id: str
     accepted: bool
+
+
+class ProviderInfo(BaseModel):
+    id: str
+    name: str
+    env_var: str | None
+    base_url: str | None
+    configured: bool
+
+
+class ProviderListResponse(BaseModel):
+    providers: list[ProviderInfo]
+
+
+class SetKeyRequest(BaseModel):
+    api_key: str = Field(..., min_length=1)
+
+
+class SetKeyResponse(BaseModel):
+    id: str
+    configured: bool
