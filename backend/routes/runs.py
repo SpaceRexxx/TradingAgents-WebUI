@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -27,18 +28,21 @@ async def get_run_pdf(ticker: str, trade_date: str) -> Response:
 
     json_path = Path(match["json_path"])
     if not json_path.exists():
+        # Generic message — do not leak the absolute on-disk path.
         raise HTTPException(
-            status_code=404, detail=f"final_state JSON missing at {json_path}"
+            status_code=404,
+            detail=f"final_state file missing for {ticker} {trade_date}",
         )
     final_state = json.loads(json_path.read_text(encoding="utf-8"))
 
     pdf_bytes = await asyncio.to_thread(
         pdf_service.generate_pdf, final_state, ticker, trade_date
     )
+    # Sanitize path params before embedding in the Content-Disposition
+    # header so a ticker like `A"x` cannot inject/break the header.
+    safe_name = re.sub(r"[^\w.\-]", "_", f"{ticker}_{trade_date}")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{ticker}_{trade_date}.pdf"'
-        },
+        headers={"Content-Disposition": f'inline; filename="{safe_name}.pdf"'},
     )

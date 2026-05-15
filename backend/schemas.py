@@ -33,7 +33,7 @@ class ProviderListResponse(BaseModel):
 
 
 class SetKeyRequest(BaseModel):
-    api_key: str = Field(..., min_length=1)
+    api_key: str = Field(..., min_length=1, max_length=4096)
 
     @field_validator("api_key")
     @classmethod
