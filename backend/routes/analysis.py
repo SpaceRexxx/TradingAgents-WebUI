@@ -50,6 +50,24 @@ async def stream(websocket: WebSocket, run_id: str) -> None:
         await websocket.close(code=4404)
         return
 
+    if handle.is_terminal():
+        # Drain any events that were queued before this late subscriber
+        # connected, then emit a synthetic terminal event if none was found.
+        found_terminal = False
+        while not handle.queue.empty():
+            event = handle.queue.get_nowait()
+            await websocket.send_text(json.dumps(event, default=str))
+            if event["type"] in {"done", "aborted", "error"}:
+                found_terminal = True
+                break
+        if not found_terminal:
+            payload: dict = {"type": handle.status.value}
+            if handle.status.value == "error" and handle.error:
+                payload["message"] = handle.error
+            await websocket.send_text(json.dumps(payload, default=str))
+        await websocket.close()
+        return
+
     try:
         while True:
             try:

@@ -124,3 +124,33 @@ def test_abort_transitions_run_to_aborted(monkeypatch):
                     break
             else:
                 pytest.fail("Did not reach aborted state")
+
+
+def test_websocket_after_run_terminal_returns_immediately(app_with_fake_graph):
+    import time
+    from starlette.websockets import WebSocketDisconnect
+
+    with TestClient(app_with_fake_graph) as client:
+        resp = client.post(
+            "/api/analysis/start",
+            json={"ticker": "TEST", "trade_date": "2026-01-01"},
+        )
+        run_id = resp.json()["run_id"]
+
+        with client.websocket_connect(f"/api/analysis/ws/{run_id}") as ws:
+            while True:
+                if json.loads(ws.receive_text())["type"] == "done":
+                    break
+
+        # Second connect AFTER terminal must resolve fast: either a terminal
+        # event, or 4404 if the handle was already evicted (Task 4). Never a
+        # ~30s hang.
+        start = time.monotonic()
+        try:
+            with client.websocket_connect(f"/api/analysis/ws/{run_id}") as ws2:
+                msg = json.loads(ws2.receive_text())
+                assert msg["type"] in {"done", "aborted", "error"}
+        except WebSocketDisconnect as exc:
+            assert exc.code == 4404
+        elapsed = time.monotonic() - start
+        assert elapsed < 5.0
