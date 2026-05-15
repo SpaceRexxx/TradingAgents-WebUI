@@ -66,7 +66,11 @@ The 6 limitations the Step 1a review flagged are now fixed:
 5. ✅ `POST /abort` returns `{run_id, accepted: true}` instead of a misleading `status` that was almost always `"running"`.
 6. ✅ `PATCH /api/history/{ticker}/{trade_date}` returns 404 when no analysis is indexed for that ticker/date (`set_rating` now returns rows-affected).
 
-**Residual (acknowledged, out of Step 1a.5 scope):** a run whose WebSocket is *never* connected by any client leaks its `RunHandle` for the process lifetime — eviction is WS-driven and there is no background reaper. Acceptable under the single-user local-dev model; revisit if the backend is ever multi-tenant or long-lived. Also: a PATCH carrying both `note` and `rating` for an unknown target silently no-ops the note but 404s on the rating (`set_note` was not in scope for the rows-affected change).
+**Residuals (acknowledged, out of Step 1a.5 scope):**
+
+- A run whose WebSocket is *never* connected by any client leaks its `RunHandle` for the process lifetime — eviction is WS-driven and there is no background reaper. Acceptable under the single-user local-dev model; revisit if the backend is ever multi-tenant or long-lived.
+- A PATCH carrying both `note` and `rating` for an unknown target silently no-ops the note but 404s on the rating (`set_note` was not in scope for the rows-affected change).
+- **Results-dir divergence (Step 1b must address):** `persist_run` writes to the engine's `graph.config["results_dir"]`, but `GET /api/history` reads from `Settings.results_dir` (`TRADINGAGENTS_RESULTS_DIR`, default `~/Desktop/Stock`). If these differ, a run persists to disk but never appears in history. Normally identical; Step 1b's config consolidation should make the backend pass an explicit `results_dir` through so the write and read paths cannot diverge.
 
 Still deferred to **Step 1a.6**: `/api/providers/*`, `/api/diagnostics/*`, `GET /api/runs/{id}/pdf`, `GET /api/history/{id}/diff/{otherId}`.
 Still deferred to **Step 1b**: `webapp.py` → API-client migration.
