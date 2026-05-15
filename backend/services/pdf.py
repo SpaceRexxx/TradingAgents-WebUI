@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import subprocess
 import sys
 
@@ -44,8 +45,10 @@ with sync_playwright() as p:
 
 
 def _build_html(final_state: dict, ticker: str, trade_date: str) -> str:
-    parts = [f"<h1>{ticker} 交易分析报告</h1>",
-             f"<p><b>分析日期:</b> {trade_date}</p><hr>"]
+    safe_ticker = html.escape(ticker)
+    safe_date = html.escape(trade_date)
+    parts = [f"<h1>{safe_ticker} 交易分析报告</h1>",
+             f"<p><b>分析日期:</b> {safe_date}</p><hr>"]
     for section_title, keys in _SECTIONS:
         chunk = []
         for key, sub_title in keys:
