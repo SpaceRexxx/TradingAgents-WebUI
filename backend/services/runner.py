@@ -76,9 +76,17 @@ async def _run(
             cancel_event=handle.cancel_event,
         )
 
+    async def _drain() -> None:
+        if _chunk_futures:
+            await asyncio.gather(
+                *[asyncio.wrap_future(f) for f in _chunk_futures],
+                return_exceptions=True,
+            )
+
     try:
         final_state = await asyncio.to_thread(_sync_runner)
     except RuntimeError as exc:
+        await _drain()
         if "cancelled" in str(exc).lower():
             await handle.mark_aborted()
             return
@@ -86,16 +94,12 @@ async def _run(
         await handle.mark_error(str(exc))
         return
     except Exception as exc:  # noqa: BLE001 - surface every engine failure
+        await _drain()
         logger.exception("Analysis %s failed", handle.run_id)
         await handle.mark_error(str(exc))
         return
 
-    # Drain all in-flight chunk queue-puts before emitting "done", so consumers
-    # always see chunks before the terminal event regardless of engine speed.
-    if _chunk_futures:
-        await asyncio.gather(
-            *[asyncio.wrap_future(f) for f in _chunk_futures],
-        )
+    await _drain()
 
     results_dir = engine_meta.get("results_dir")
     if results_dir:

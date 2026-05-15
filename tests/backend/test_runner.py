@@ -71,3 +71,33 @@ async def test_graph_exception_marks_run_as_error():
     await asyncio.wait_for(handle.task, timeout=2.0)
     assert handle.status == RunStatus.ERROR
     assert handle.error and "kaboom" in handle.error
+
+
+@pytest.mark.asyncio
+async def test_abort_drains_chunks_before_aborted_event():
+    """On abort, every chunk emitted before cancellation must appear in the
+    queue BEFORE the 'aborted' terminal event."""
+    registry = RunRegistry()
+
+    class _SlowCancelGraph:
+        def propagate(self, company_name, trade_date, on_chunk=None, cancel_event=None):
+            for i in range(5):
+                if cancel_event is not None and cancel_event.is_set():
+                    raise RuntimeError("Analysis cancelled by caller")
+                if on_chunk is not None:
+                    on_chunk({"market_report": f"c-{i}"})
+            raise RuntimeError("Analysis cancelled by caller")
+
+    req = AnalysisRequest(ticker="TEST", trade_date="2026-01-01")
+    handle = await start_analysis(req, registry, graph_factory=lambda cfg: _SlowCancelGraph())
+    handle.cancel_event.set()
+    await asyncio.wait_for(handle.task, timeout=2.0)
+
+    events = []
+    while not handle.queue.empty():
+        events.append(handle.queue.get_nowait())
+
+    types = [e["type"] for e in events]
+    assert types[-1] == "aborted"
+    aborted_idx = types.index("aborted")
+    assert "chunk" not in types[aborted_idx + 1:]
