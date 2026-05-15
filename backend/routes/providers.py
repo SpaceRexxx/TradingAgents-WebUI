@@ -6,6 +6,7 @@ from backend.schemas import (
     ProviderListResponse,
     SetKeyRequest,
     SetKeyResponse,
+    TestProviderResponse,
 )
 from backend.services import providers as provider_service
 
@@ -29,3 +30,12 @@ def set_key(provider_id: str, body: SetKeyRequest) -> SetKeyResponse:
             detail=f"Provider {provider_id} does not use an API key",
         )
     return SetKeyResponse(id=provider_id, configured=True)
+
+
+@router.post("/{provider_id}/test", response_model=TestProviderResponse)
+def test_provider(provider_id: str) -> TestProviderResponse:
+    try:
+        result = provider_service.test_provider(provider_id)
+    except provider_service.UnknownProvider:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
+    return TestProviderResponse(**result)

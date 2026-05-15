@@ -68,3 +68,43 @@ def test_set_key_rejects_newline_injection(env_file):
         assert resp.status_code == 422
     # .env must NOT have gained an ARK_API_KEY line.
     assert "ARK_API_KEY=evil" not in env_file.read_text()
+
+
+def test_test_provider_not_configured_returns_ok_false(env_file, monkeypatch):
+    monkeypatch.delenv("ARK_API_KEY", raising=False)
+    with _client() as client:
+        resp = client.post("/api/providers/volcengine/test")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == "volcengine"
+        assert body["ok"] is False
+        assert body["reason"] == "not_configured"
+
+
+def test_test_provider_reachable(env_file, monkeypatch):
+    from backend.services import providers as ps
+
+    monkeypatch.setattr(ps, "_probe_models_endpoint", lambda url, key: (True, 200))
+    with _client() as client:
+        resp = client.post("/api/providers/deepseek/test")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"id": "deepseek", "ok": True, "reason": "reachable", "status": 200}
+
+
+def test_test_provider_unreachable(env_file, monkeypatch):
+    from backend.services import providers as ps
+
+    monkeypatch.setattr(ps, "_probe_models_endpoint", lambda url, key: (False, 0))
+    with _client() as client:
+        resp = client.post("/api/providers/deepseek/test")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["reason"] == "unreachable"
+
+
+def test_test_unknown_provider_returns_404(env_file):
+    with _client() as client:
+        resp = client.post("/api/providers/nope/test")
+        assert resp.status_code == 404

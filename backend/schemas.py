@@ -48,3 +48,10 @@ class SetKeyRequest(BaseModel):
 class SetKeyResponse(BaseModel):
     id: str
     configured: bool
+
+
+class TestProviderResponse(BaseModel):
+    id: str
+    ok: bool
+    reason: str
+    status: int | None = None

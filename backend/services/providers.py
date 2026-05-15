@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import httpx
+
 from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV
 
 # base_url per provider, mirrored from cli/utils.py:select_llm_provider's
@@ -92,3 +94,39 @@ def set_key(provider_id: str, api_key: str) -> None:
 
     env_path.write_text("".join(lines), encoding="utf-8")
     os.environ[env_var] = api_key
+
+
+def _probe_models_endpoint(base_url: str, api_key: str | None) -> tuple[bool, int]:
+    """GET {base_url}/models with a short timeout. Returns (ok, status_code).
+    ok is True only on HTTP 2xx. Network failure -> (False, 0)."""
+    url = base_url.rstrip("/") + "/models"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        resp = httpx.get(url, headers=headers, timeout=5.0)
+        return (200 <= resp.status_code < 300, resp.status_code)
+    except httpx.HTTPError:
+        return (False, 0)
+
+
+def test_provider(provider_id: str) -> dict:
+    """Reachability check. Returns {id, ok, reason, status?}.
+    Raises UnknownProvider for an unknown id."""
+    if provider_id not in PROVIDER_API_KEY_ENV:
+        raise UnknownProvider(provider_id)
+
+    env_var = PROVIDER_API_KEY_ENV[provider_id]
+    base_url = _BASE_URL.get(provider_id)
+    key = None if env_var is None else os.environ.get(env_var, "").strip()
+
+    if env_var is not None and not key:
+        return {"id": provider_id, "ok": False, "reason": "not_configured"}
+    if not base_url:
+        return {"id": provider_id, "ok": True, "reason": "skipped_no_base_url"}
+
+    ok, status = _probe_models_endpoint(base_url, key)
+    return {
+        "id": provider_id,
+        "ok": ok,
+        "reason": "reachable" if ok else "unreachable",
+        "status": status,
+    }
