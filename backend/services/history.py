@@ -17,8 +17,5 @@ def set_note(results_dir: Path, ticker: str, trade_date: str, note: str) -> None
     sqlite_history.set_note(results_dir, ticker, trade_date, note)
 
 
-def set_rating(results_dir: Path, ticker: str, trade_date: str, rating: str) -> None:
-    if hasattr(sqlite_history, "set_rating"):
-        sqlite_history.set_rating(results_dir, ticker, trade_date, rating)
-    else:
-        raise NotImplementedError("set_rating not yet supported by sqlite_history")
+def set_rating(results_dir: Path, ticker: str, trade_date: str, rating: str) -> bool:
+    return sqlite_history.set_rating(results_dir, ticker, trade_date, rating)

@@ -33,8 +33,12 @@ def patch_history(ticker: str, trade_date: str, body: PatchHistoryRequest) -> di
     if body.note is not None:
         history_service.set_note(settings.results_dir, ticker, trade_date, body.note)
     if body.rating is not None:
-        try:
-            history_service.set_rating(settings.results_dir, ticker, trade_date, body.rating)
-        except NotImplementedError as exc:
-            raise HTTPException(status_code=501, detail=str(exc))
+        updated = history_service.set_rating(
+            settings.results_dir, ticker, trade_date, body.rating
+        )
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No indexed analysis for {ticker} {trade_date}",
+            )
     return {"ticker": ticker, "trade_date": trade_date, "updated": True}

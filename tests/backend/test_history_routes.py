@@ -69,3 +69,12 @@ def test_patch_history_sets_rating(seeded_results):
     # zero rows (which would silently pass a status-only assertion).
     rows = sqlite_history.query_analyses(seeded_results, ticker="TEST")
     assert rows and rows[0].get("user_rating") == "good"
+
+
+def test_patch_history_unknown_target_returns_404(seeded_results):
+    with _client() as client:
+        resp = client.patch(
+            "/api/history/GHOST/2099-01-01",
+            json={"rating": "good"},
+        )
+        assert resp.status_code == 404
