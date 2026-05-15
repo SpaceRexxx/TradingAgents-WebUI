@@ -66,6 +66,7 @@ async def stream(websocket: WebSocket, run_id: str) -> None:
                 payload["message"] = handle.error
             await websocket.send_text(json.dumps(payload, default=str))
         await websocket.close()
+        registry.drop(run_id)
         return
 
     try:
@@ -85,3 +86,10 @@ async def stream(websocket: WebSocket, run_id: str) -> None:
             await websocket.close()
         except Exception:
             pass
+        # Best-effort eviction: only drop once the run itself is terminal,
+        # so a client disconnecting mid-run does not remove a live handle.
+        # Caveat: with multiple concurrent WS subscribers the first to finish
+        # evicts the handle for the rest — acceptable under the Step 1a
+        # single-user model.
+        if handle is not None and handle.is_terminal():
+            registry.drop(run_id)

@@ -126,6 +126,23 @@ def test_abort_transitions_run_to_aborted(monkeypatch):
                 pytest.fail("Did not reach aborted state")
 
 
+def test_registry_drops_handle_after_terminal_ws(app_with_fake_graph):
+    with TestClient(app_with_fake_graph) as client:
+        resp = client.post(
+            "/api/analysis/start",
+            json={"ticker": "TEST", "trade_date": "2026-01-01"},
+        )
+        run_id = resp.json()["run_id"]
+
+        with client.websocket_connect(f"/api/analysis/ws/{run_id}") as ws:
+            while True:
+                if json.loads(ws.receive_text())["type"] == "done":
+                    break
+
+    registry = app_with_fake_graph.state.registry
+    assert registry.get(run_id) is None
+
+
 def test_websocket_after_run_terminal_returns_immediately(app_with_fake_graph):
     import time
     from starlette.websockets import WebSocketDisconnect
