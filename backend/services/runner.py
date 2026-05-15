@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from backend.services.persistence import persist_run
 from backend.services.registry import RunHandle, RunRegistry
 
 logger = logging.getLogger(__name__)
@@ -60,8 +61,14 @@ async def _run(
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
         _chunk_futures.append(fut)
 
+    engine_meta: dict[str, Any] = {}
+
     def _sync_runner() -> dict[str, Any]:
         graph = graph_factory(request.config_overrides)
+        cfg = getattr(graph, "config", {}) or {}
+        engine_meta["results_dir"] = cfg.get("results_dir")
+        engine_meta["model"] = cfg.get("deep_think_llm")
+        engine_meta["provider"] = cfg.get("llm_provider")
         return graph.propagate(
             request.ticker,
             request.trade_date,
@@ -89,5 +96,20 @@ async def _run(
         await asyncio.gather(
             *[asyncio.wrap_future(f) for f in _chunk_futures],
         )
+
+    results_dir = engine_meta.get("results_dir")
+    if results_dir:
+        try:
+            await asyncio.to_thread(
+                persist_run,
+                results_dir,
+                request.ticker,
+                request.trade_date,
+                final_state,
+                engine_meta.get("model"),
+                engine_meta.get("provider"),
+            )
+        except Exception:
+            logger.exception("Persist failed for %s", handle.run_id)
 
     await handle.mark_done(final_state)
