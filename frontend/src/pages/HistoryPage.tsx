@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { listHistory, patchHistory, pdfUrl } from "../api/client";
-import type { HistoryItem } from "../api/types";
+import { listHistory, patchHistory, pdfUrl, getDiff } from "../api/client";
+import type { HistoryItem, DiffResponse } from "../api/types";
 import { useAppStore } from "../store/appStore";
 
 export default function HistoryPage() {
@@ -9,6 +9,9 @@ export default function HistoryPage() {
   const [selected, setSelected] = useState<HistoryItem | null>(null);
   const [note, setNote] = useState("");
   const [rating, setRating] = useState("");
+  const [selA, setSelA] = useState("");
+  const [selB, setSelB] = useState("");
+  const [diffResult, setDiffResult] = useState<DiffResponse | null>(null);
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = useCallback((ticker?: string) => {
@@ -36,6 +39,18 @@ export default function HistoryPage() {
       load(filter || undefined);
     } catch (e: any) {
       pushToast("err", `保存失败: ${e.status ?? e}`);
+    }
+  };
+
+  const compare = async () => {
+    if (!selA || !selB) return;
+    const [tA, dA] = selA.split("|");
+    const [tB, dB] = selB.split("|");
+    try {
+      const result = await getDiff(tA, dA, tB, dB);
+      setDiffResult(result);
+    } catch (e: any) {
+      pushToast("err", `对比失败: ${e.status ?? e}`);
     }
   };
 
@@ -74,6 +89,66 @@ export default function HistoryPage() {
                target="_blank" rel="noreferrer"
                style={{ textDecoration: "none", padding: "var(--sp-2) var(--sp-4)" }}>下载 PDF</a>
           </div>
+        </div>
+      )}
+      <div className="card col">
+        <div className="row">
+          <label htmlFor="diff-select-a">对比 A</label>
+          <select
+            id="diff-select-a"
+            aria-label="对比 A"
+            value={selA}
+            onChange={(e) => setSelA(e.target.value)}
+          >
+            <option value="">-- 选择 A --</option>
+            {items.map((it) => (
+              <option key={`${it.ticker}|${it.trade_date}`} value={`${it.ticker}|${it.trade_date}`}>
+                {it.ticker} {it.trade_date}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="diff-select-b">对比 B</label>
+          <select
+            id="diff-select-b"
+            aria-label="对比 B"
+            value={selB}
+            onChange={(e) => setSelB(e.target.value)}
+          >
+            <option value="">-- 选择 B --</option>
+            {items.map((it) => (
+              <option key={`${it.ticker}|${it.trade_date}`} value={`${it.ticker}|${it.trade_date}`}>
+                {it.ticker} {it.trade_date}
+              </option>
+            ))}
+          </select>
+          <button className="btn" onClick={compare}>对比</button>
+        </div>
+      </div>
+      {diffResult && (
+        <div className="card col">
+          <div className="row">
+            <span>{diffResult.a.ticker} {diffResult.a.trade_date} vs {diffResult.b.ticker} {diffResult.b.trade_date}</span>
+            <button className="btn-ghost" onClick={() => setDiffResult(null)}>清除对比</button>
+          </div>
+          {Object.entries(diffResult.sections).map(([key, sec]) => (
+            <div key={key} className="card col">
+              <div className="row">
+                <span>{key}</span>
+                <span className="tag">{sec.changed ? "变更" : "无变更"}</span>
+              </div>
+              {sec.changed && (
+                <pre style={{
+                  fontFamily: "monospace",
+                  whiteSpace: "pre-wrap",
+                  maxHeight: "20rem",
+                  overflow: "auto",
+                  fontSize: "var(--fz-sm)",
+                }}>
+                  {sec.diff}
+                </pre>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

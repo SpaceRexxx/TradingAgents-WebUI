@@ -59,3 +59,79 @@ it("PDF link points at the runs endpoint", async () => {
   expect(await screen.findByRole("link", { name: "下载 PDF" }))
     .toHaveAttribute("href", "/api/runs/AAPL/2026-01-02/pdf");
 });
+
+const ITEM_A = {
+  ticker: "AAPL", trade_date: "2026-01-01", rating: "Buy",
+  summary: "first", model: "deepseek", provider: "DeepSeek",
+  note: null, user_rating: null, created_at: "2026-01-01T10:00:00Z",
+  json_path: "/x/AAPL/2026-01-01/final_state_report.json",
+};
+const ITEM_B = {
+  ticker: "AAPL", trade_date: "2026-02-01", rating: "Sell",
+  summary: "second", model: "deepseek", provider: "DeepSeek",
+  note: null, user_rating: null, created_at: "2026-02-01T10:00:00Z",
+  json_path: "/x/AAPL/2026-02-01/final_state_report.json",
+};
+const DIFF_RESP = {
+  a: { ticker: "AAPL", trade_date: "2026-01-01" },
+  b: { ticker: "AAPL", trade_date: "2026-02-01" },
+  sections: {
+    final_trade_decision: { changed: true, diff: "- BUY\n+ SELL" },
+    market_report: { changed: false, diff: "" },
+  },
+};
+
+it("compares two runs", async () => {
+  const f = vi.fn().mockImplementation(async (url: string, _init?: RequestInit) => {
+    if (url.includes("/diff/")) {
+      return { ok: true, status: 200, json: async () => DIFF_RESP } as unknown as Response;
+    }
+    return { ok: true, status: 200, json: async () => ({ items: [ITEM_A, ITEM_B] }) } as unknown as Response;
+  });
+  vi.stubGlobal("fetch", f);
+  render(<HistoryPage />);
+  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-01" }));
+
+  // Select A and B
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 A" }), "AAPL|2026-01-01");
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 B" }), "AAPL|2026-02-01");
+  await userEvent.click(screen.getByRole("button", { name: "对比" }));
+
+  await waitFor(() =>
+    expect(f).toHaveBeenCalledWith(
+      "/api/history/AAPL/2026-01-01/diff/AAPL/2026-02-01",
+      expect.objectContaining({ method: "GET" })
+    )
+  );
+
+  expect(await screen.findByText("final_trade_decision")).toBeInTheDocument();
+  expect(screen.getByText(/- BUY/)).toBeInTheDocument();
+  expect(screen.getByText(/\+ SELL/)).toBeInTheDocument();
+  expect(screen.getByText("无变更")).toBeInTheDocument();
+});
+
+it("diff 404 toasts an error", async () => {
+  const f = vi.fn().mockImplementation(async (url: string, _init?: RequestInit) => {
+    if (url.includes("/diff/")) {
+      return { ok: false, status: 404, json: async () => ({ detail: "not found" }) } as unknown as Response;
+    }
+    return { ok: true, status: 200, json: async () => ({ items: [ITEM_A, ITEM_B] }) } as unknown as Response;
+  });
+  vi.stubGlobal("fetch", f);
+  render(<HistoryPage />);
+  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-01" }));
+
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 A" }), "AAPL|2026-01-01");
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 B" }), "AAPL|2026-02-01");
+  await userEvent.click(screen.getByRole("button", { name: "对比" }));
+
+  await waitFor(() =>
+    expect(f).toHaveBeenCalledWith(
+      "/api/history/AAPL/2026-01-01/diff/AAPL/2026-02-01",
+      expect.objectContaining({ method: "GET" })
+    )
+  );
+
+  // No diff panel should appear
+  expect(screen.queryByText("final_trade_decision")).toBeNull();
+});
