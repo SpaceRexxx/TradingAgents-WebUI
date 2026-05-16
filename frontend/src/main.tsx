@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import App from "./App";
+import DiagnosticsPage from "./pages/DiagnosticsPage";
 import "./styles/tokens.css";
 import "./styles/components.css";
 
@@ -14,7 +15,7 @@ const router = createBrowserRouter([
       { path: "analysis", element: <div data-testid="placeholder-analysis" /> },
       { path: "history", element: <div data-testid="placeholder-history" /> },
       { path: "config", element: <div data-testid="placeholder-config" /> },
-      { path: "diagnostics", element: <div data-testid="placeholder-diagnostics" /> },
+      { path: "diagnostics", element: <DiagnosticsPage /> },
     ],
   },
 ]);
