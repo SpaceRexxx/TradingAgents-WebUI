@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import App from "./App";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
+import HistoryPage from "./pages/HistoryPage";
 import "./styles/tokens.css";
 import "./styles/components.css";
 
@@ -13,7 +14,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/analysis" replace /> },
       { path: "analysis", element: <div data-testid="placeholder-analysis" /> },
-      { path: "history", element: <div data-testid="placeholder-history" /> },
+      { path: "history", element: <HistoryPage /> },
       { path: "config", element: <div data-testid="placeholder-config" /> },
       { path: "diagnostics", element: <DiagnosticsPage /> },
     ],
