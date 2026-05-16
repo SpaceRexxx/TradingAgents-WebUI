@@ -64,7 +64,8 @@ export default function AnalysisPage() {
       </div>
 
       {REPORT_KEYS.map(({ key, label }) => {
-        const val = stream.report[key] as string | undefined;
+        const raw = stream.report[key];
+        const val = typeof raw === "string" ? raw : undefined;
         if (!val) return null;
         return (
           <div key={key} className="card">
