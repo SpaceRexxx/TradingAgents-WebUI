@@ -6,11 +6,17 @@ import { useAppStore } from "../store/appStore";
 export default function DiagnosticsPage() {
   const [data, setData] = useState<DiagnosticsResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = (fn: () => Promise<DiagnosticsResponse>) => {
     setBusy(true);
-    fn().then(setData).catch((e) => pushToast("err", `诊断失败: ${e.status ?? e}`)).finally(() => setBusy(false));
+    setErrored(false);
+    fn()
+      .then((d) => { setData(d); setLoading(false); })
+      .catch((e) => { setErrored(true); setLoading(false); pushToast("err", `诊断失败: ${e.status ?? e}`); })
+      .finally(() => setBusy(false));
   };
   useEffect(() => { load(getDiagnostics); }, []);
 
@@ -20,6 +26,13 @@ export default function DiagnosticsPage() {
         <h2>数据源诊断</h2>
         <button className="btn" disabled={busy} onClick={() => load(runDiagnostics)}>重新检测</button>
       </div>
+      {loading && <p className="muted">加载中…</p>}
+      {!loading && errored && !data && (
+        <p className="error-text">
+          加载失败，请重试。{" "}
+          <button className="btn" onClick={() => load(getDiagnostics)}>重试</button>
+        </p>
+      )}
       {data && data.degraded.length === 0 && (
         <div className="card" style={{ borderLeft: "4px solid var(--c-ok)" }}>全部数据源正常</div>
       )}

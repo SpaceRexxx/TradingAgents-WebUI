@@ -135,3 +135,35 @@ it("diff 404 toasts an error", async () => {
   // No diff panel should appear
   expect(screen.queryByText("final_trade_decision")).toBeNull();
 });
+
+// --- NEW TESTS: loading / empty / error states ---
+
+it("shows empty state when fetch resolves with no items", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true, status: 200, json: async () => ({ items: [] }),
+  } as unknown as Response));
+  render(<HistoryPage />);
+  await waitFor(() => expect(screen.getByText("暂无历史分析记录。")).toBeInTheDocument());
+});
+
+it("shows inline error and retry button on initial load failure", async () => {
+  const f = vi.fn().mockRejectedValueOnce({ status: 500 });
+  vi.stubGlobal("fetch", f);
+  render(<HistoryPage />);
+  await waitFor(() => expect(screen.getByText("加载失败，请重试。")).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+});
+
+it("retry button re-calls /api/history", async () => {
+  const f = vi.fn()
+    .mockRejectedValueOnce({ status: 500 })
+    .mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ items: [] }),
+    } as unknown as Response);
+  vi.stubGlobal("fetch", f);
+  render(<HistoryPage />);
+  await waitFor(() => screen.getByRole("button", { name: "重试" }));
+  await userEvent.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() =>
+    expect(f).toHaveBeenCalledWith("/api/history", expect.objectContaining({ method: "GET" })));
+});

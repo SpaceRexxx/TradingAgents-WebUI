@@ -5,6 +5,8 @@ import { useAppStore } from "../store/appStore";
 
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<HistoryItem | null>(null);
   const [note, setNote] = useState("");
@@ -15,9 +17,12 @@ export default function HistoryPage() {
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = useCallback((ticker?: string) => {
+    setLoading(true);
+    setErrored(false);
     listHistory(ticker || undefined)
-      .then((r) => setItems(r.items))
-      .catch((e) => pushToast("err", `加载历史失败: ${e.status ?? e}`));
+      .then((r) => { setItems(r.items); })
+      .catch((e) => { setErrored(true); pushToast("err", `加载历史失败: ${e.status ?? e}`); })
+      .finally(() => setLoading(false));
   }, [pushToast]);
 
   useEffect(() => { load(); }, [load]);
@@ -61,6 +66,16 @@ export default function HistoryPage() {
         <input placeholder="按 ticker 过滤" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <button className="btn" onClick={() => load(filter || undefined)}>查询</button>
       </div>
+      {loading && <p className="muted">加载中…</p>}
+      {!loading && errored && (
+        <p className="error-text">
+          加载失败，请重试。{" "}
+          <button className="btn" onClick={() => load(filter || undefined)}>重试</button>
+        </p>
+      )}
+      {!loading && !errored && items.length === 0 && (
+        <p className="muted">暂无历史分析记录。</p>
+      )}
       <table>
         <thead><tr><th>Ticker</th><th>日期</th><th>评级</th><th>模型</th><th>时间</th></tr></thead>
         <tbody>

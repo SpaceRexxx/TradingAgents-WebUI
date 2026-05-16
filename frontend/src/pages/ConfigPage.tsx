@@ -7,11 +7,17 @@ export default function ConfigPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, TestProviderResponse>>({});
+  const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const pushToast = useAppStore((s) => s.pushToast);
 
-  const load = () =>
-    listProviders().then((r) => setProviders(r.providers))
-      .catch((e) => pushToast("err", `加载 providers 失败: ${e.status ?? e}`));
+  const load = () => {
+    setErrored(false);
+    return listProviders()
+      .then((r) => { setProviders(r.providers); })
+      .catch((e) => { setErrored(true); pushToast("err", `加载 providers 失败: ${e.status ?? e}`); })
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const saveKey = async (id: string) => {
@@ -40,6 +46,13 @@ export default function ConfigPage() {
       <p style={{ color: "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
         API key 只写不回显。提交后写入 .env + 进程环境。
       </p>
+      {loading && <p className="muted">加载中…</p>}
+      {!loading && errored && providers.length === 0 && (
+        <p className="error-text">
+          加载失败，请重试。{" "}
+          <button className="btn" onClick={() => load()}>重试</button>
+        </p>
+      )}
       <table>
         <thead><tr><th>Provider</th><th>已配置</th><th>设置 Key</th><th>测试</th></tr></thead>
         <tbody>

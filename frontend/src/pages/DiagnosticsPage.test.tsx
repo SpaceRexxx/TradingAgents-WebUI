@@ -33,3 +33,27 @@ it("re-run calls POST /api/diagnostics/run", async () => {
   await waitFor(() =>
     expect(f).toHaveBeenCalledWith("/api/diagnostics/run", expect.objectContaining({ method: "POST" })));
 });
+
+// --- NEW TESTS: error state ---
+
+it("shows inline error and retry button on initial load failure", async () => {
+  const f = vi.fn().mockRejectedValueOnce({ status: 500 });
+  vi.stubGlobal("fetch", f);
+  render(<DiagnosticsPage />);
+  await waitFor(() => expect(screen.getByText("加载失败，请重试。")).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+});
+
+it("retry button re-calls /api/diagnostics", async () => {
+  const f = vi.fn()
+    .mockRejectedValueOnce({ status: 500 })
+    .mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ degraded: [], checked_at: "t" }),
+    } as unknown as Response);
+  vi.stubGlobal("fetch", f);
+  render(<DiagnosticsPage />);
+  await waitFor(() => screen.getByRole("button", { name: "重试" }));
+  await userEvent.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() =>
+    expect(f).toHaveBeenCalledWith("/api/diagnostics", expect.objectContaining({ method: "GET" })));
+});

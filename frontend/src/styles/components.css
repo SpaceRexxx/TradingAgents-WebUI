@@ -24,3 +24,19 @@ input, select, textarea {
 .col { display: flex; flex-direction: column; gap: var(--sp-3); }
 .markdown-body { font-size: var(--fz-md); line-height: 1.6; }
 .markdown-body table { margin: var(--sp-3) 0; }
+.markdown-body h1 { font-size: var(--fz-xl); margin-top: var(--sp-6); margin-bottom: var(--sp-2); }
+.markdown-body h2 { font-size: var(--fz-lg); margin-top: var(--sp-6); margin-bottom: var(--sp-2); }
+.markdown-body h3 { font-size: var(--fz-md); margin-top: var(--sp-4); margin-bottom: var(--sp-1); font-weight: 600; }
+.markdown-body p { margin: var(--sp-3) 0; }
+.markdown-body ul,
+.markdown-body ol { padding-left: var(--sp-6); margin: var(--sp-2) 0; }
+.markdown-body code { background: var(--c-surface-2); padding: 2px var(--sp-2); border-radius: 4px; font-size: var(--fz-sm); }
+.markdown-body pre { background: var(--c-surface-2); padding: var(--sp-4); border-radius: var(--radius); overflow-x: auto; }
+.markdown-body pre code { background: transparent; padding: 0; border-radius: 0; }
+.markdown-body blockquote { border-left: 3px solid var(--c-border); margin: var(--sp-3) 0; padding-left: var(--sp-4); color: var(--c-text-dim); }
+.markdown-body table th,
+.markdown-body table td { border: 1px solid var(--c-border); padding: var(--sp-2) var(--sp-3); }
+.markdown-body a { color: var(--c-accent); }
+
+.muted { color: var(--c-text-dim); font-size: var(--fz-sm); }
+.error-text { color: var(--c-err); font-size: var(--fz-sm); }
