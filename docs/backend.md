@@ -70,7 +70,7 @@ For a real end-to-end smoke test against the live engine, see Task 7 in `docs/su
 
 The 6 limitations the Step 1a review flagged are now fixed:
 
-1. ✅ Backend runs persist `{ticker}/{date}/final_state_report.json` and are indexed (`backend/services/persistence.py`, called from the runner's success path before `mark_done`). Uses the engine's actual `results_dir` (`graph.config["results_dir"]`), not `Settings.results_dir`.
+1. ✅ Backend runs persist `{ticker}/{date}/final_state_report.json` and are indexed (`backend/services/persistence.py`, called from the runner's success path before `mark_done`). Persisted to `Settings.results_dir` — the runner forces the engine's `results_dir` to that value in `_sync_runner`, so write and read paths cannot diverge (see the Results-dir residual below).
 2. ✅ WS connect after a terminal run drains any buffered events then emits a synthetic terminal event immediately — no 30s hang. Fast-path returns before the `try:` so it never triggers eviction.
 3. ✅ A `_drain()` helper runs before *every* terminal event (success/abort/error), so chunks never arrive after the terminal marker.
 4. ✅ `RunRegistry` evicts terminal handles once their WS consumer finishes (both the fast-path and the live-loop `finally`, guarded by `is_terminal()`).
