@@ -1,8 +1,8 @@
 # Backend (FastAPI)
 
-The `backend/` package wraps the existing `tradingagents/` engine with a FastAPI HTTP/WebSocket layer. It runs alongside `webapp.py` (Streamlit) — both share the same engine, results directory, and SQLite index. Step 1a does not modify `webapp.py` or `cli/`; the backend is purely additive.
+The `backend/` package wraps the existing `tradingagents/` engine with a FastAPI HTTP/WebSocket layer, sharing the same engine, results directory, and SQLite index. It is the sole server-side process for the UI.
 
-The browser client is the React SPA in `frontend/` (see `docs/frontend.md`); Streamlit `webapp.py` is retired and no longer the supported UI.
+The browser client is the React SPA in `frontend/` (see `docs/frontend.md`). Step 1b (`webapp.py` → API-client migration) was **skipped by decision**; the SPA built in Step 2 is the supported UI and Streamlit `webapp.py` is retired (the file remains in-tree but is no longer launched or documented as the UI). `cli/` is unchanged and still supported.
 
 ## Run
 
@@ -43,7 +43,7 @@ API keys are managed by `/api/providers/{id}/key` (Step 1a.6): the key is writte
 
 Path-identity note: the original spec wrote `/api/runs/{id}/pdf` and `.../diff/{otherId}` with opaque ids, but indexed history is keyed by `(ticker, trade_date)` — the routes use those segments instead.
 
-All originally-deferred endpoints are now implemented. Remaining work: **Step 1b** — `webapp.py` → API-client migration.
+All originally-deferred endpoints are now implemented. Step 1b (`webapp.py` → API-client migration) was skipped by decision; the React SPA in `frontend/` (Step 2) is the supported UI.
 
 ## Event payloads on `/api/analysis/ws/{run_id}`
 
@@ -84,7 +84,7 @@ The 6 limitations the Step 1a review flagged are now fixed:
 - **Results-dir divergence (Step 1b must address):** `persist_run` writes to the engine's `graph.config["results_dir"]`, but `GET /api/history` reads from `Settings.results_dir` (`TRADINGAGENTS_RESULTS_DIR`, default `~/Desktop/Stock`). If these differ, a run persists to disk but never appears in history. Normally identical; Step 1b's config consolidation should make the backend pass an explicit `results_dir` through so the write and read paths cannot diverge.
 
 Step 1a.6 (providers / diagnostics / pdf / diff endpoints) is now **complete** — see the Endpoints table above.
-Still deferred to **Step 1b**: `webapp.py` → API-client migration.
+Step 1b (`webapp.py` → API-client migration) was skipped by decision; Streamlit is retired and the React SPA in `frontend/` (Step 2) is the supported UI.
 
 ## Rollback
 
