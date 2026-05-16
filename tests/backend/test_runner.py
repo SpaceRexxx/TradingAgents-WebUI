@@ -1,9 +1,11 @@
 import asyncio
+from pathlib import Path
 
 import pytest
 
 from backend.services.registry import RunRegistry, RunStatus
 from backend.services.runner import AnalysisRequest, start_analysis
+from tradingagents.storage import sqlite_history
 
 
 class _FakeGraph:
@@ -110,3 +112,56 @@ async def test_abort_drains_chunks_before_aborted_event():
     assert types[-1] == "aborted"
     aborted_idx = types.index("aborted")
     assert "chunk" not in types[aborted_idx + 1:]
+
+
+@pytest.mark.asyncio
+async def test_engine_writes_to_settings_results_dir(tmp_path, monkeypatch):
+    """The engine's results_dir must equal Settings.results_dir.
+
+    Proves write-dir == backend-read-dir: persisted JSON + sqlite index must
+    land in the same tmp dir that Settings reads. Fails before the fix
+    (engine_meta.results_dir is None when factory ignores cfg; or the engine
+    default diverges from Settings); passes after the fix forces results_dir
+    to Settings.results_dir in _sync_runner.
+    """
+    monkeypatch.setenv("TRADINGAGENTS_RESULTS_DIR", str(tmp_path))
+
+    class _ConfigEchoGraph:
+        def __init__(self, cfg):
+            self.config = dict(cfg)
+
+        def propagate(self, ticker, trade_date, on_chunk=None, cancel_event=None):
+            if on_chunk:
+                on_chunk({"market_report": "m"})
+            return {
+                "company_of_interest": ticker,
+                "trade_date": trade_date,
+                "final_trade_decision": "BUY",
+            }
+
+    registry = RunRegistry()
+    handle = await start_analysis(
+        AnalysisRequest(ticker="ZZZ", trade_date="2026-03-03"),
+        registry,
+        graph_factory=lambda cfg: _ConfigEchoGraph(cfg),
+    )
+
+    # Drain queue until done.
+    while True:
+        evt = await asyncio.wait_for(handle.queue.get(), timeout=5.0)
+        if evt["type"] == "done":
+            break
+
+    # The persisted JSON must exist under the Settings dir (tmp_path).
+    report_path = tmp_path / "ZZZ" / "2026-03-03" / "final_state_report.json"
+    assert report_path.exists(), (
+        f"final_state_report.json not found at {report_path}; "
+        "engine wrote to a different results_dir than Settings.results_dir"
+    )
+
+    # The sqlite index must be queryable from the same dir.
+    rows = sqlite_history.query_analyses(tmp_path, ticker="ZZZ")
+    assert rows, (
+        "sqlite index has no row for ZZZ in tmp_path; "
+        "persist_run indexed a different directory than Settings.results_dir"
+    )

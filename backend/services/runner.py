@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from backend.deps import get_settings_dep
 from backend.services.persistence import persist_run
 from backend.services.registry import RunHandle, RunRegistry
 
@@ -64,7 +65,12 @@ async def _run(
     engine_meta: dict[str, Any] = {}
 
     def _sync_runner() -> dict[str, Any]:
-        graph = graph_factory(request.config_overrides)
+        # Force the engine to write where the backend reads (history/pdf
+        # endpoints use Settings.results_dir). Without this the engine's
+        # own results_dir can diverge and persisted runs become invisible.
+        settings_results_dir = str(get_settings_dep().results_dir)
+        factory_cfg = {**request.config_overrides, "results_dir": settings_results_dir}
+        graph = graph_factory(factory_cfg)
         cfg = getattr(graph, "config", {}) or {}
         engine_meta["results_dir"] = cfg.get("results_dir")
         engine_meta["model"] = cfg.get("deep_think_llm")

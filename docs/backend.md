@@ -81,7 +81,7 @@ The 6 limitations the Step 1a review flagged are now fixed:
 
 - A run whose WebSocket is *never* connected by any client leaks its `RunHandle` for the process lifetime — eviction is WS-driven and there is no background reaper. Acceptable under the single-user local-dev model; revisit if the backend is ever multi-tenant or long-lived.
 - A PATCH carrying both `note` and `rating` for an unknown target silently no-ops the note but 404s on the rating (`set_note` was not in scope for the rows-affected change).
-- **Results-dir divergence (Step 1b must address):** `persist_run` writes to the engine's `graph.config["results_dir"]`, but `GET /api/history` reads from `Settings.results_dir` (`TRADINGAGENTS_RESULTS_DIR`, default `~/Desktop/Stock`). If these differ, a run persists to disk but never appears in history. Normally identical; Step 1b's config consolidation should make the backend pass an explicit `results_dir` through so the write and read paths cannot diverge.
+- **Results-dir divergence — RESOLVED:** the runner now forces the engine's `results_dir` to `Settings.results_dir` (`backend/services/runner.py` `_sync_runner`), so persisted runs always land where `GET /api/history` / pdf read. Request-supplied `results_dir` overrides are intentionally ignored to prevent re-divergence.
 
 Step 1a.6 (providers / diagnostics / pdf / diff endpoints) is now **complete** — see the Endpoints table above.
 Step 1b (`webapp.py` → API-client migration) was skipped by decision; Streamlit is retired and the React SPA in `frontend/` (Step 2) is the supported UI.
