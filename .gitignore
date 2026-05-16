@@ -231,4 +231,3 @@ eval_results/
 *.log
 
 # Local leftovers from newer UI experiments
-frontend/
