@@ -14,11 +14,14 @@ export type WsEvent =
   | { type: "ping" };
 
 export interface HistoryItem {
+  id: number;
   ticker: string; trade_date: string;
   rating: string | null; summary: string | null;
   model: string | null; provider: string | null;
+  has_position: string | null;
   note: string | null; user_rating: string | null;
   created_at: string; json_path: string;
+  pdf_path: string | null;
 }
 export interface HistoryListResponse { items: HistoryItem[]; }
 export interface PatchHistoryRequest { note?: string; rating?: string; }
