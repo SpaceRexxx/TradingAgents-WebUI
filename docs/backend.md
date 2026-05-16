@@ -2,6 +2,8 @@
 
 The `backend/` package wraps the existing `tradingagents/` engine with a FastAPI HTTP/WebSocket layer. It runs alongside `webapp.py` (Streamlit) — both share the same engine, results directory, and SQLite index. Step 1a does not modify `webapp.py` or `cli/`; the backend is purely additive.
 
+The browser client is the React SPA in `frontend/` (see `docs/frontend.md`); Streamlit `webapp.py` is retired and no longer the supported UI.
+
 ## Run
 
 ```bash

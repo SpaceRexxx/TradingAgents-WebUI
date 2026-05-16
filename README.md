@@ -246,11 +246,18 @@ cp .env.example .env
 
 ### 1. 启动 Web UI 可视化控制台 (推荐)
 
-这是最直观的使用方式，配置 Tab 支持注入 API Key、实时里程碑进度条 + JS 倒计时、竖向代理 Tab 流式展示报告、历史分析一键跳转、PDF 一键导出：
+这是最直观的使用方式，配置 Tab 支持注入 API Key、实时里程碑进度条 + JS 倒计时、竖向代理 Tab 流式展示报告、历史分析一键跳转、PDF 一键导出。
+
+**v2.0 使用 React SPA + FastAPI 后端（两个终端）：**
 
 ```bash
-streamlit run webapp.py
+# 终端 1（后端，项目根目录）
+uvicorn backend.main:app --port 8765
+# 终端 2（前端）
+cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
+
+详见 `docs/frontend.md` 和 `docs/backend.md`。
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
