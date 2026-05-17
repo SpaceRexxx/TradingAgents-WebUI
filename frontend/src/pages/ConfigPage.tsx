@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import {
   listProviders, setProviderKey, testProvider, getSettings, updateSettings,
 } from "../api/client";
-import type { ProviderInfo, TestProviderResponse } from "../api/types";
+import type { ProviderInfo, TestProviderResponse, AppSettings } from "../api/types";
 import { useAppStore } from "../store/appStore";
+
+const LLM_FIELDS: { key: keyof AppSettings; label: string; ph: string }[] = [
+  { key: "llm_provider", label: "供应商", ph: "DeepSeek" },
+  { key: "deep_think_llm", label: "深度引擎模型", ph: "deepseek-chat" },
+  { key: "quick_think_llm", label: "快速引擎模型", ph: "deepseek-reasoner" },
+  { key: "backend_url", label: "Base URL", ph: "https://api.deepseek.com/v1" },
+];
 
 export default function ConfigPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -12,6 +19,7 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
   const [resultsDir, setResultsDir] = useState("");
+  const [llm, setLlm] = useState<Record<string, string>>({});
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = () => {
@@ -24,14 +32,44 @@ export default function ConfigPage() {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    getSettings().then((s) => setResultsDir(s.results_dir ?? "")).catch(() => {});
+    getSettings()
+      .then((s) => {
+        setResultsDir(s.results_dir ?? "");
+        setLlm({
+          llm_provider: s.llm_provider ?? "",
+          deep_think_llm: s.deep_think_llm ?? "",
+          quick_think_llm: s.quick_think_llm ?? "",
+          backend_url: s.backend_url ?? "",
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const saveResultsDir = async () => {
     try {
-      const s = await updateSettings(resultsDir);
+      const s = await updateSettings({ results_dir: resultsDir });
       setResultsDir(s.results_dir);
       pushToast("ok", "下载目录已保存（新分析生效）");
+    } catch (e: any) {
+      pushToast("err", `保存失败 (${e.status ?? e})`);
+    }
+  };
+
+  const saveLlm = async () => {
+    try {
+      const patch: Partial<AppSettings> = {};
+      for (const { key } of LLM_FIELDS) {
+        const v = (llm[key] ?? "").trim();
+        if (v) patch[key] = v;
+      }
+      const s = await updateSettings(patch);
+      setLlm({
+        llm_provider: s.llm_provider,
+        deep_think_llm: s.deep_think_llm,
+        quick_think_llm: s.quick_think_llm,
+        backend_url: s.backend_url,
+      });
+      pushToast("ok", "模型 / 供应商已保存（新分析生效）");
     } catch (e: any) {
       pushToast("err", `保存失败 (${e.status ?? e})`);
     }
@@ -73,6 +111,30 @@ export default function ConfigPage() {
         />
         <button className="btn" disabled={!resultsDir.trim()} onClick={saveResultsDir}>
           保存
+        </button>
+      </div>
+
+      <h2>模型 / 供应商</h2>
+      <p style={{ color: "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
+        分析所用的供应商与模型（写入 .env + 进程环境，对新分析生效；右上角徽标显示当前深度模型）。留空的字段不修改。
+      </p>
+      <div className="col" style={{ gap: "var(--sp-2)", maxWidth: 520 }}>
+        {LLM_FIELDS.map((f) => (
+          <label key={f.key} className="row" style={{ gap: "var(--sp-3)", alignItems: "center" }}>
+            <span style={{ width: 110, color: "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
+              {f.label}
+            </span>
+            <input
+              aria-label={f.label}
+              style={{ flex: 1, minWidth: 240 }}
+              placeholder={f.ph}
+              value={llm[f.key] ?? ""}
+              onChange={(e) => setLlm((m) => ({ ...m, [f.key]: e.target.value }))}
+            />
+          </label>
+        ))}
+        <button className="btn" style={{ width: "fit-content" }} onClick={saveLlm}>
+          保存模型设置
         </button>
       </div>
 

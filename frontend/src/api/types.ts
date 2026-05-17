@@ -64,7 +64,14 @@ export interface ProviderInfo {
   id: string; name: string;
   env_var: string | null; base_url: string | null; configured: boolean;
 }
-export interface AppSettings { results_dir: string; }
+export interface AppSettings {
+  results_dir: string;
+  llm_provider: string;
+  deep_think_llm: string;
+  quick_think_llm: string;
+  backend_url: string;
+}
+export type UpdateSettings = Partial<AppSettings>;
 
 export interface ProviderListResponse { providers: ProviderInfo[]; }
 export interface SetKeyResponse { id: string; configured: boolean; }

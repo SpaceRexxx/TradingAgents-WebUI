@@ -59,17 +59,31 @@ class TestProviderResponse(BaseModel):
 
 class SettingsResponse(BaseModel):
     results_dir: str
+    llm_provider: str = ""
+    deep_think_llm: str = ""
+    quick_think_llm: str = ""
+    backend_url: str = ""
 
 
 class UpdateSettingsRequest(BaseModel):
-    results_dir: str = Field(..., min_length=1, max_length=4096)
+    # All optional: PUT only the fields you want to change.
+    results_dir: str | None = Field(None, min_length=1, max_length=4096)
+    llm_provider: str | None = Field(None, min_length=1, max_length=256)
+    deep_think_llm: str | None = Field(None, min_length=1, max_length=256)
+    quick_think_llm: str | None = Field(None, min_length=1, max_length=256)
+    backend_url: str | None = Field(None, min_length=1, max_length=4096)
 
-    @field_validator("results_dir")
+    @field_validator(
+        "results_dir", "llm_provider", "deep_think_llm",
+        "quick_think_llm", "backend_url",
+    )
     @classmethod
-    def _no_newlines(cls, v: str) -> str:
-        # Same .env-injection guard as SetKeyRequest.
+    def _no_newlines(cls, v: str | None) -> str | None:
+        # .env-injection guard (same as SetKeyRequest).
+        if v is None:
+            return v
         if "\n" in v or "\r" in v:
-            raise ValueError("results_dir must not contain newline characters")
+            raise ValueError("value must not contain newline characters")
         return v.strip()
 
 

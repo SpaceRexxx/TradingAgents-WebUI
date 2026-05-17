@@ -21,10 +21,14 @@ class AnalysisRequest:
 
 
 def _default_graph_factory(cfg: dict[str, Any]):
-    from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.default_config import DEFAULT_CONFIG, _apply_env_overrides
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-    merged = {**DEFAULT_CONFIG, **cfg}
+    # DEFAULT_CONFIG is frozen at import time; re-apply TRADINGAGENTS_* env
+    # overrides on a copy so model/provider changes saved via /api/settings
+    # take effect for new runs without a backend restart.
+    base = _apply_env_overrides(dict(DEFAULT_CONFIG))
+    merged = {**base, **cfg}
     # `selected_analysts` is a TradingAgentsGraph constructor arg, not a config
     # key — pull it out of the merged config so the UI can choose analysts.
     selected = merged.pop("selected_analysts", None)

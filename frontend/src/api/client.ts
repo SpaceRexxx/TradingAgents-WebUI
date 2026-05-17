@@ -78,8 +78,8 @@ export const getQuote = async (ticker: string): Promise<Quote | null> => {
 
 export const getSettings = () =>
   req<AppSettings>("/api/settings", { method: "GET" });
-export const updateSettings = (results_dir: string) =>
-  req<AppSettings>("/api/settings", jsonBody("PUT", { results_dir }));
+export const updateSettings = (patch: Partial<AppSettings>) =>
+  req<AppSettings>("/api/settings", jsonBody("PUT", patch));
 
 export const getCumulativeStats = () =>
   req<CumulativeStats>("/api/stats/cumulative", { method: "GET" });
