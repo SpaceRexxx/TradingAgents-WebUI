@@ -295,6 +295,93 @@ docker compose up webapp frontend   # 后端 + 前端 dev (:5173)
 
 ---
 
+## 🤖 给 AI Agent 的说明 (Machine-Readable Quickstart)
+
+> 本节面向自动化智能体。命令均为非交互、幂等，可直接执行。`$REPO` = 仓库根目录绝对路径。
+
+### 1. 前置检查
+- 需要 `python3` (≥3.10)、`node` (≥18)、`npm`、`git`。缺失则先安装；不要用交互式安装器。
+- PDF 渲染需要 Playwright Chromium（见步骤 2）。A 股实时报价/舆情可选 `npm i -g @jackwener/opencli`（缺失时报价端点返回 204，不阻断分析）。
+
+### 2. 安装（非交互）
+```bash
+cd "$REPO"
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+( cd frontend && npm ci || npm install )
+```
+
+### 3. 配置 API Key（二选一）
+- 写 `.env`（根目录）：每行 `PROVIDER_ENV=key`，例如 `DEEPSEEK_API_KEY=sk-...`（变量名见上文「必需的 API」）。
+- 或通过端点：`POST /api/providers/{id}/key`，body `{"api_key":"..."}`（写入 `.env`+进程环境，永不回显）。
+
+### 4. 启动后端（编程驱动用纯后端，无需前端）
+```bash
+. .venv/bin/activate
+nohup python -m uvicorn backend.main:app --port 8765 > /tmp/ta_backend.log 2>&1 &
+# 就绪探测（最多等 ~30s）
+until curl -fs http://localhost:8765/api/health | grep -q '"status":"ok"'; do sleep 1; done
+```
+（带界面则改用 `./dev.sh`，前端在 http://localhost:5173 ，API 代理到 :8765。）
+
+### 5. 跑一次分析并取结果（纯 REST，无需 WebSocket）
+```bash
+# 5a. 启动；返回 {"run_id":"..."}
+curl -s -XPOST http://localhost:8765/api/analysis/start \
+  -H 'Content-Type: application/json' -d '{
+    "ticker":"AAPL",
+    "trade_date":"2026-05-17",
+    "config_overrides":{
+      "selected_analysts":["market","social","news","fundamentals"],
+      "max_debate_rounds":1,"max_risk_discuss_rounds":1,
+      "lookback_days":30,"news_lookback_days":7,
+      "has_position":"未持有"
+    }
+  }'
+
+# 5b. 完成信号 = 该 (ticker, trade_date) 出现在历史索引（成功才入库）。轮询：
+until curl -s 'http://localhost:8765/api/history?ticker=AAPL' \
+  | grep -q '"trade_date": *"2026-05-17"'; do sleep 5; done
+
+# 5c. 取结构化报告 JSON（含各 Agent 报告、final_trade_decision、token_stats）
+cat "$RESULTS_DIR/AAPL/2026-05-17/final_state_report.json"
+# 5d. 取 PDF
+curl -s -o report.pdf 'http://localhost:8765/api/runs/AAPL/2026-05-17/pdf'
+```
+- 实时进度（可选）：`WS /api/analysis/ws/{run_id}`，事件 `status|chunk|done|aborted|error|ping`；`done` 事件带 `token_stats`。中止：`POST /api/analysis/{run_id}/abort`。
+- `$RESULTS_DIR` 默认 `~/Desktop/Stock`，可用环境变量 `TRADINGAGENTS_RESULTS_DIR` 指定，或 `PUT /api/settings` body `{"results_dir":"/abs/path"}`（对新分析生效）。
+
+### 6. 关键端点速查
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/api/health` | 就绪探测 `{"status":"ok"}` |
+| POST | `/api/analysis/start` | 启动分析 → `{run_id}` |
+| WS | `/api/analysis/ws/{run_id}` | 流式 `status/chunk/done/aborted/error/ping` |
+| POST | `/api/analysis/{run_id}/abort` | 中止 |
+| GET | `/api/history?ticker=` | 历史索引（完成信号） |
+| POST | `/api/history/reindex` | 从引擎日志补建缺失索引 |
+| GET | `/api/runs/{ticker}/{trade_date}/pdf` | 按需 PDF |
+| GET | `/api/stats/cumulative` | 累计 Token/成本统计 |
+| GET/PUT | `/api/settings` | 读/改下载目录 |
+| GET/POST | `/api/providers` · `/api/providers/{id}/key` | Provider 列表 / 写 Key |
+| GET | `/api/diagnostics` | 数据源健康 |
+| GET | `/api/quote/{ticker}` | 实时报价（无 opencli 时 204） |
+
+完整交互式文档：运行后访问 `http://localhost:8765/docs`（OpenAPI）。后端细节见 `docs/backend.md`。
+
+### 7. 自检（可选）
+```bash
+. .venv/bin/activate && python -m pytest tests/backend -q
+( cd frontend && npm test )
+```
+
+### 8. CLI 替代（无 HTTP，单进程）
+`python -m cli.main` —— 交互式，不适合全自动驱动；自动化优先用上面的 REST 方式。
+
+---
+
 ## ⚖️ License & Acknowledgements (版权与致谢)
 
 原始框架灵感与基础架构来源于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)，向原作者致以诚挚感谢。本项目沿用 [Apache License 2.0](./LICENSE)。
