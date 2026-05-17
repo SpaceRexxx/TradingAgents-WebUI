@@ -18,8 +18,8 @@ _cache: dict[str, tuple[float, dict | None]] = {}
 def _live_quote(symbol: str) -> dict | None:
     """Run `opencli xueqiu stock {symbol} -f json`; None on any failure.
 
-    Mirrors the retired Streamlit logic (webapp.py:1230-1250) so the data
-    source and degradation behavior stay identical.
+    Ported from the now-removed Streamlit UI's live-quote helper so the
+    data source and degradation behavior stay identical.
     """
     if not _opencli_available():
         return None

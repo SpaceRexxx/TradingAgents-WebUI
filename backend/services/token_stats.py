@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 CUMULATIVE_FILENAME = "cumulative_stats.json"
 
 # DeepSeek V4 estimated pricing (USD / 1M tokens). Ported verbatim from the
-# retired Streamlit webapp (webapp.py:797-804). Actual prices per provider.
+# now-removed Streamlit UI's pricing table. Actual prices per provider.
 _PRICING: dict[str, tuple[float, float]] = {
     "deepseek-v4-flash": (0.50, 1.50),
     "deepseek-v4-pro": (1.00, 3.00),
@@ -32,7 +32,7 @@ _ZERO_CUMULATIVE = {
 
 class TokenAccumulator:
     """Accumulates token usage + tool-call counts from streamed LangGraph
-    chunks. Mirrors webapp.py:_accumulate_token_stats — chunks are cumulative
+    chunks. Ported from the now-removed Streamlit UI — chunks are cumulative
     streams, so per-field we keep the running max rather than summing.
     """
 

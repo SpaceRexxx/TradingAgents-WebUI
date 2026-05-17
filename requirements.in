@@ -36,9 +36,6 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 
-# --- Legacy Streamlit UI (retired; webapp.py kept in-tree, not launched) ---
-streamlit
-
 # --- CLI & shared ---
 playwright
 markdown2

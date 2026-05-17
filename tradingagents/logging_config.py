@@ -7,7 +7,7 @@ automatically pick up the format. To enable, add:
     from tradingagents.logging_config import configure_logging
     configure_logging()
 
-at the top of an entry point (webapp.py / cli/main.py).
+at the top of an entry point (backend/main.py / cli/main.py).
 """
 
 from __future__ import annotations

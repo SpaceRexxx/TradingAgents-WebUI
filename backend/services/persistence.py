@@ -21,8 +21,8 @@ def persist_run(
 ) -> Path:
     """Write final_state_report.json and index it in sqlite_history.
 
-    Mirrors webapp.py:save_analysis_results minus the PDF (PDF generation
-    is deferred to Step 1a.6). Returns the JSON path written.
+    Writes the report JSON only; PDFs are generated on demand by the
+    /api/runs/{ticker}/{trade_date}/pdf endpoint. Returns the JSON path.
     """
     results_dir = Path(results_dir)
     save_path = results_dir / ticker / trade_date

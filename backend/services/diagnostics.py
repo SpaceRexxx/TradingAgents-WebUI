@@ -5,7 +5,7 @@ import shutil
 
 def detect_degraded_sources() -> list[str]:
     """Lightweight probe: which data sources are unavailable. Ported from
-    webapp.py:_detect_degraded_sources (kept independent of Streamlit)."""
+    the now-removed Streamlit UI's degraded-source detector."""
     degraded: list[str] = []
     if not shutil.which("opencli"):
         degraded.append("OpenCLI 未安装 → 雪球 / Reddit / 新浪 数据源不可用")
