@@ -76,7 +76,7 @@ def test_put_llm_settings_partial_does_not_touch_others(tmp_path, monkeypatch):
     _clear_llm_env(monkeypatch)
     with _client() as client:
         before = client.get("/api/settings").json()
-        client.put("/api/settings", json={"deep_think_llm": "deepseek-chat"})
+        client.put("/api/settings", json={"deep_think_llm": "deepseek-v4-pro"})
         after = client.get("/api/settings").json()
-    assert after["deep_think_llm"] == "deepseek-chat"
+    assert after["deep_think_llm"] == "deepseek-v4-pro"
     assert after["quick_think_llm"] == before["quick_think_llm"]

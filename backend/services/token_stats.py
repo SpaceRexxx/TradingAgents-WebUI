@@ -14,8 +14,6 @@ CUMULATIVE_FILENAME = "cumulative_stats.json"
 _PRICING: dict[str, tuple[float, float]] = {
     "deepseek-v4-flash": (0.50, 1.50),
     "deepseek-v4-pro": (1.00, 3.00),
-    "deepseek-chat": (0.27, 1.10),
-    "deepseek-reasoner": (0.55, 2.19),
     "gpt-4o": (5.00, 15.00),
     "gpt-4o-mini": (0.15, 0.60),
 }

@@ -7,8 +7,8 @@ import { useAppStore } from "../store/appStore";
 
 const LLM_FIELDS: { key: keyof AppSettings; label: string; ph: string }[] = [
   { key: "llm_provider", label: "供应商", ph: "DeepSeek" },
-  { key: "deep_think_llm", label: "深度引擎模型", ph: "deepseek-chat" },
-  { key: "quick_think_llm", label: "快速引擎模型", ph: "deepseek-reasoner" },
+  { key: "deep_think_llm", label: "深度引擎模型", ph: "deepseek-v4-pro" },
+  { key: "quick_think_llm", label: "快速引擎模型", ph: "deepseek-v4-flash" },
   { key: "backend_url", label: "Base URL", ph: "https://api.deepseek.com/v1" },
 ];
 
