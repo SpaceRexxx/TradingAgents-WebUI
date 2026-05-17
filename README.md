@@ -248,7 +248,17 @@ cp .env.example .env
 
 这是最直观的使用方式，配置 Tab 支持注入 API Key、实时里程碑进度条 + JS 倒计时、竖向代理 Tab 流式展示报告、历史分析一键跳转、PDF 一键导出。
 
-**v2.0 使用 React SPA + FastAPI 后端（两个终端）：**
+**v2.0 架构为 React SPA + FastAPI 后端（两个进程）。**
+
+一条命令同时启动前后端（推荐，保留热重载，`Ctrl+C` 一并退出）：
+
+```bash
+./dev.sh
+```
+
+首次运行会自动 `npm install`。启动后打开 **http://localhost:5173**（前端，`/api` 与 `/ws` 自动代理到后端 :8765）；后端 OpenAPI 文档在 http://localhost:8765/docs。可用 `BACKEND_PORT` 覆盖后端端口。
+
+如需分别启动（调试单侧时）：
 
 ```bash
 # 终端 1（后端，项目根目录）
@@ -257,13 +267,13 @@ uvicorn backend.main:app --port 8765
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-详见 `docs/frontend.md` 和 `docs/backend.md`。
+分析结果（JSON / SQLite 索引 / 累计统计）默认存放在 `~/Desktop/Stock`，可在 **配置** Tab 的「下载目录」修改（对新分析生效），或用环境变量 `TRADINGAGENTS_RESULTS_DIR` 指定。详见 `docs/frontend.md` 和 `docs/backend.md`。
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
-> 🎉 **自动 PDF 研报**：分析完成后，Web 页面会自动调起集成的 `Playwright` 引擎，将 Markdown 报表全自动转录渲染为 **PDF 研报**，点击按钮即可下载。
+> 🎉 **PDF 研报（按需生成）**：分析完成后点击「下载本次 PDF」，后端调起集成的 `Playwright` 引擎将 Markdown 报表实时渲染为 **PDF** 返回（不落盘）。历史分析页同样支持按行下载；若某次分析未入索引，可点「重建索引」恢复。
 
 ### 2. 启动极速 CLI 文本端
 
