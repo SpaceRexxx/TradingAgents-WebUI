@@ -202,3 +202,50 @@ async def test_engine_writes_to_settings_results_dir(tmp_path, monkeypatch):
         "sqlite index has no row for ZZZ in tmp_path; "
         "persist_run indexed a different directory than Settings.results_dir"
     )
+
+
+@pytest.mark.asyncio
+async def test_propagate_tuple_return_is_persisted_and_token_stats_emitted(
+    tmp_path, monkeypatch
+):
+    """The real engine returns (final_state, processed_signal). The runner
+    must unpack the tuple; otherwise persist_run gets a tuple, throws, is
+    swallowed, and the run is never written/indexed (the live 404 bug)."""
+    monkeypatch.setenv("TRADINGAGENTS_RESULTS_DIR", str(tmp_path))
+
+    class _Msg:
+        usage_metadata = {"input_tokens": 120, "output_tokens": 30}
+        tool_calls = [{"name": "get_news"}]
+
+    class _TupleGraph:
+        def __init__(self, cfg):
+            self.config = dict(cfg)
+
+        def propagate(self, ticker, trade_date, on_chunk=None, cancel_event=None):
+            if on_chunk:
+                on_chunk({"market_report": "m", "messages": [_Msg()]})
+            state = {
+                "company_of_interest": ticker,
+                "trade_date": trade_date,
+                "final_trade_decision": "BUY",
+            }
+            return state, "BUY"  # tuple, like the real engine
+
+    registry = RunRegistry()
+    handle = await start_analysis(
+        AnalysisRequest(ticker="TUP", trade_date="2026-03-04"),
+        registry,
+        graph_factory=lambda cfg: _TupleGraph(cfg),
+    )
+
+    done = None
+    while True:
+        evt = await asyncio.wait_for(handle.queue.get(), timeout=5.0)
+        if evt["type"] == "done":
+            done = evt
+            break
+
+    assert (tmp_path / "TUP" / "2026-03-04" / "final_state_report.json").exists()
+    assert sqlite_history.query_analyses(tmp_path, ticker="TUP")
+    assert done["token_stats"]["input_tokens"] == 120
+    assert done["token_stats"]["tool_call_count"] == 1

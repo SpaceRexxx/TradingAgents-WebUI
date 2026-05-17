@@ -10,6 +10,7 @@ from backend.routes import (
     providers,
     quote,
     runs,
+    settings as settings_routes,
     stats,
 )
 from backend.services.registry import RunRegistry
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(providers.router)
     app.include_router(quote.router)
     app.include_router(runs.router)
+    app.include_router(settings_routes.router)
     app.include_router(stats.router)
     return app
 

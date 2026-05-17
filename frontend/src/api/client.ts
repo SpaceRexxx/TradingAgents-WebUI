@@ -2,7 +2,7 @@ import type {
   Health, StartAnalysisRequest, StartAnalysisResponse, AbortResponse,
   HistoryListResponse, PatchHistoryRequest, DiffResponse,
   DiagnosticsResponse, ProviderListResponse, SetKeyResponse, TestProviderResponse,
-  Quote, CumulativeStats,
+  Quote, CumulativeStats, AppSettings,
 } from "./types";
 
 export class ApiError extends Error {
@@ -69,6 +69,11 @@ export const getQuote = async (ticker: string): Promise<Quote | null> => {
   if (resp.status === 204 || !resp.ok) return null;
   try { return (await resp.json()) as Quote; } catch { return null; }
 };
+
+export const getSettings = () =>
+  req<AppSettings>("/api/settings", { method: "GET" });
+export const updateSettings = (results_dir: string) =>
+  req<AppSettings>("/api/settings", jsonBody("PUT", { results_dir }));
 
 export const getCumulativeStats = () =>
   req<CumulativeStats>("/api/stats/cumulative", { method: "GET" });

@@ -57,6 +57,22 @@ class TestProviderResponse(BaseModel):
     status: int | None = None
 
 
+class SettingsResponse(BaseModel):
+    results_dir: str
+
+
+class UpdateSettingsRequest(BaseModel):
+    results_dir: str = Field(..., min_length=1, max_length=4096)
+
+    @field_validator("results_dir")
+    @classmethod
+    def _no_newlines(cls, v: str) -> str:
+        # Same .env-injection guard as SetKeyRequest.
+        if "\n" in v or "\r" in v:
+            raise ValueError("results_dir must not contain newline characters")
+        return v.strip()
+
+
 class DiffSide(BaseModel):
     ticker: str
     trade_date: str

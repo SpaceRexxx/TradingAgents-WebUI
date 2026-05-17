@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { listProviders, setProviderKey, testProvider } from "../api/client";
+import {
+  listProviders, setProviderKey, testProvider, getSettings, updateSettings,
+} from "../api/client";
 import type { ProviderInfo, TestProviderResponse } from "../api/types";
 import { useAppStore } from "../store/appStore";
 
@@ -9,6 +11,7 @@ export default function ConfigPage() {
   const [results, setResults] = useState<Record<string, TestProviderResponse>>({});
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
+  const [resultsDir, setResultsDir] = useState("");
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = () => {
@@ -19,6 +22,20 @@ export default function ConfigPage() {
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    getSettings().then((s) => setResultsDir(s.results_dir ?? "")).catch(() => {});
+  }, []);
+
+  const saveResultsDir = async () => {
+    try {
+      const s = await updateSettings(resultsDir);
+      setResultsDir(s.results_dir);
+      pushToast("ok", "下载目录已保存（新分析生效）");
+    } catch (e: any) {
+      pushToast("err", `保存失败 (${e.status ?? e})`);
+    }
+  };
 
   const saveKey = async (id: string) => {
     try {
@@ -42,6 +59,23 @@ export default function ConfigPage() {
 
   return (
     <div className="col">
+      <h2>下载目录</h2>
+      <p style={{ color: "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
+        分析结果（JSON / PDF / SQLite 索引 / 累计统计）的存放目录。修改后对新分析生效。
+      </p>
+      <div className="row">
+        <input
+          aria-label="下载目录"
+          style={{ flex: 1, minWidth: 280 }}
+          placeholder="/path/to/results"
+          value={resultsDir}
+          onChange={(e) => setResultsDir(e.target.value)}
+        />
+        <button className="btn" disabled={!resultsDir.trim()} onClick={saveResultsDir}>
+          保存
+        </button>
+      </div>
+
       <h2>Provider 配置</h2>
       <p style={{ color: "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
         API key 只写不回显。提交后写入 .env + 进程环境。

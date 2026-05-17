@@ -64,6 +64,8 @@ export interface ProviderInfo {
   id: string; name: string;
   env_var: string | null; base_url: string | null; configured: boolean;
 }
+export interface AppSettings { results_dir: string; }
+
 export interface ProviderListResponse { providers: ProviderInfo[]; }
 export interface SetKeyResponse { id: string; configured: boolean; }
 export interface TestProviderResponse {

@@ -86,12 +86,18 @@ async def _run(
         engine_meta["results_dir"] = cfg.get("results_dir")
         engine_meta["model"] = cfg.get("deep_think_llm")
         engine_meta["provider"] = cfg.get("llm_provider")
-        return graph.propagate(
+        result = graph.propagate(
             request.ticker,
             request.trade_date,
             on_chunk=_emit_chunk,
             cancel_event=handle.cancel_event,
         )
+        # The real engine returns (final_state, processed_signal); test fakes
+        # return the state dict directly. Normalize to the state dict so
+        # downstream persist/index/token logic always gets a mapping.
+        if isinstance(result, tuple):
+            result = result[0]
+        return result
 
     async def _drain() -> None:
         if _chunk_futures:
