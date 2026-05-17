@@ -11,6 +11,26 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 BACKEND_PORT="${BACKEND_PORT:-8765}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+
+# Free a port held by a stale process from a previous crashed/hung run.
+# A reloader that died without releasing the socket leaves the port bound
+# (often a CLOSED socket whose FD is still open), so a fresh ./dev.sh would
+# fail to bind. Reap any holder before (re)starting.
+free_port() {
+  local port="$1" label="$2" held
+  held=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
+  if [ -n "${held}" ]; then
+    echo "→ port ${port} (${label}) held by stale PID(s): ${held//$'\n'/ } — reaping"
+    kill ${held} 2>/dev/null || true
+    sleep 1
+    held=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
+    [ -n "${held}" ] && kill -9 ${held} 2>/dev/null || true
+    sleep 1
+  fi
+}
+free_port "${BACKEND_PORT}" backend
+free_port "${FRONTEND_PORT}" frontend
 
 # Kill the whole process group on exit so neither server is orphaned.
 pids=()
