@@ -50,12 +50,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
     # LLM settings
-    "llm_provider": "DeepSeek",
-    "deep_think_llm": "deepseek-v4-pro",
-    "quick_think_llm": "deepseek-v4-flash",
+    "llm_provider": "openai",
+    "deep_think_llm": "gpt-5.4",
+    "quick_think_llm": "gpt-5.4-mini",
     # When None, each provider's client falls back to its own default endpoint.
     # The WebUI and CLI override this per provider at runtime.
-    "backend_url": "https://api.deepseek.com/v1",
+    "backend_url": None,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from backend.deps import get_settings_dep
+from backend.services.live_tokens import LiveTokenCallback, clear_streaming_payload
 from backend.services.persistence import persist_run
 from backend.services.registry import RunHandle, RunRegistry
 from backend.services.token_stats import TokenAccumulator, accumulate_cumulative
@@ -29,12 +30,13 @@ def _default_graph_factory(cfg: dict[str, Any]):
     # take effect for new runs without a backend restart.
     base = _apply_env_overrides(dict(DEFAULT_CONFIG))
     merged = {**base, **cfg}
+    callbacks = merged.pop("__callbacks", None)
     # `selected_analysts` is a TradingAgentsGraph constructor arg, not a config
     # key — pull it out of the merged config so the UI can choose analysts.
     selected = merged.pop("selected_analysts", None)
     if selected:
-        return TradingAgentsGraph(selected, config=merged)
-    return TradingAgentsGraph(config=merged)
+        return TradingAgentsGraph(selected, config=merged, callbacks=callbacks)
+    return TradingAgentsGraph(config=merged, callbacks=callbacks)
 
 
 async def start_analysis(
@@ -66,12 +68,14 @@ async def _run(
     # Track in-flight chunk futures so we can drain them before marking done.
     _chunk_futures: list[concurrent.futures.Future] = []
     token_acc = TokenAccumulator()
+    live_callback = LiveTokenCallback(lambda chunk: _emit_chunk(chunk))
 
     def _emit_chunk(chunk: dict[str, Any]) -> None:
         # Accumulate token/tool stats here while `chunk` still holds the raw
         # LangChain message objects (usage_metadata is lost after JSON WS
         # serialization downstream).
         token_acc.feed(chunk)
+        chunk = clear_streaming_payload(chunk, live_callback.seen_agents)
         # Bridge sync engine callback to the asyncio queue.
         coro = handle.emit({"type": "chunk", "payload": chunk})
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -84,7 +88,11 @@ async def _run(
         # endpoints use Settings.results_dir). Without this the engine's
         # own results_dir can diverge and persisted runs become invisible.
         settings_results_dir = str(get_settings_dep().results_dir)
-        factory_cfg = {**request.config_overrides, "results_dir": settings_results_dir}
+        factory_cfg = {
+            **request.config_overrides,
+            "results_dir": settings_results_dir,
+            "__callbacks": [live_callback],
+        }
         graph = graph_factory(factory_cfg)
         cfg = getattr(graph, "config", {}) or {}
         engine_meta["results_dir"] = cfg.get("results_dir")

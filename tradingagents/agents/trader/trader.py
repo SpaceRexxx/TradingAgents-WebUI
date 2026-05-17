@@ -42,7 +42,7 @@ def create_trader(llm):
                     f"{instrument_context} "
                     f"该计划融合了当前技术市场趋势、宏观经济指标和社交媒体情绪的洞察。"
                     f"请将此计划作为评估你下一步交易决策的基础。\n\n"
-                    f"拟议投资计划: {investment_plan}\n\n"
+                    f"Proposed Investment Plan（拟议投资计划）: {investment_plan}\n\n"
                     f"请利用这些见解，做出明智且具有战略性的决策。"
                 ),
             },

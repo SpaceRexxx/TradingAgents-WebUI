@@ -6,12 +6,12 @@ import AnalysisPage from "./AnalysisPage";
 class FakeWS {
   static last: FakeWS;
   onmessage: ((e: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((e: { code: number; reason: string; wasClean: boolean }) => void) | null = null;
   onerror: (() => void) | null = null;
   closed = false;
   constructor(public url: string) { FakeWS.last = this; }
   send() {}
-  close() { this.closed = true; this.onclose?.(); }
+  close() { this.closed = true; this.onclose?.({ code: 1000, reason: "", wasClean: true }); }
   emit(o: unknown) { this.onmessage?.({ data: JSON.stringify(o) }); }
 }
 

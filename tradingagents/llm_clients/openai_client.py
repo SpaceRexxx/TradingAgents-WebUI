@@ -1,7 +1,7 @@
 import os
 from typing import Any, Optional
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_openai import ChatOpenAI
 
 from .api_key_env import get_api_key_env
@@ -65,6 +65,18 @@ def _input_to_messages(input_: Any) -> list:
     return []
 
 
+def _reasoning_content_from_chunk(chunk: dict) -> str | None:
+    choices = (
+        chunk.get("choices", [])
+        or chunk.get("chunk", {}).get("choices", [])
+    )
+    if not choices:
+        return None
+    delta = choices[0].get("delta") or {}
+    reasoning = delta.get("reasoning_content")
+    return reasoning if isinstance(reasoning, str) and reasoning else None
+
+
 class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     """DeepSeek-specific overrides on top of the OpenAI-compatible client.
 
@@ -108,6 +120,25 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
                 generation.message.additional_kwargs["reasoning_content"] = reasoning
         return chat_result
 
+    def _convert_chunk_to_generation_chunk(
+        self,
+        chunk: dict,
+        default_chunk_class: type,
+        base_generation_info: dict | None,
+    ):
+        generation_chunk = super()._convert_chunk_to_generation_chunk(
+            chunk,
+            default_chunk_class,
+            base_generation_info,
+        )
+        if generation_chunk is None:
+            return None
+
+        reasoning = _reasoning_content_from_chunk(chunk)
+        if reasoning and isinstance(generation_chunk.message, AIMessageChunk):
+            generation_chunk.message.additional_kwargs["reasoning_content"] = reasoning
+        return generation_chunk
+
 
 class MimoChatOpenAI(DeepSeekChatOpenAI):
     """Xiaomi MiMo OpenAI-compatible client.
@@ -143,7 +174,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
-    "timeout", "max_retries", "reasoning_effort",
+    "timeout", "max_retries", "reasoning_effort", "streaming",
     "api_key", "callbacks", "http_client", "http_async_client",
 )
 

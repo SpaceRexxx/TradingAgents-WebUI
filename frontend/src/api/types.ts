@@ -32,11 +32,16 @@ export interface CumulativeStats {
 
 export type WsEvent =
   | { type: "status"; status: string }
-  | { type: "chunk"; payload: Record<string, unknown> }
+  | { type: "chunk"; payload: Record<string, unknown> & { __streaming?: Record<string, boolean>; __activity?: StreamActivity } }
   | { type: "done"; status: string; token_stats?: TokenStats }
   | { type: "aborted" }
   | { type: "error"; message: string }
   | { type: "ping" };
+
+export interface StreamActivity {
+  agent: string;
+  kind: string;
+}
 
 export interface HistoryItem {
   id: number;

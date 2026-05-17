@@ -35,6 +35,23 @@ describe("deriveProgress", () => {
     expect(p.agents.find((a) => a.key === "market")!.status).toBe("done");
   });
 
+  it("keeps live token output running until final node chunk clears it", () => {
+    const live = deriveProgress(
+      { market_report: "partial", __streaming: { market: true } },
+      true,
+    );
+    expect(live.agents.find((a) => a.key === "market")!.status).toBe("running");
+    expect(live.agents.find((a) => a.key === "social")!.status).toBe("pending");
+    expect(live.percent).toBe(0);
+
+    const final = deriveProgress(
+      { market_report: "complete", __streaming: { market: false } },
+      true,
+    );
+    expect(final.agents.find((a) => a.key === "market")!.status).toBe("done");
+    expect(final.agents.find((a) => a.key === "social")!.status).toBe("running");
+  });
+
   it("final decision via final_trade_decision marks portfolio_manager done", () => {
     const p = deriveProgress({ final_trade_decision: "BUY" }, false);
     expect(p.agents.find((a) => a.key === "portfolio_manager")!.status).toBe("done");
