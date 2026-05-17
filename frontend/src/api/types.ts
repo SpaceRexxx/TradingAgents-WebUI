@@ -3,6 +3,13 @@ export interface StartAnalysisRequest {
   ticker: string; trade_date: string; config_overrides: Record<string, unknown>;
 }
 export interface StartAnalysisResponse { run_id: string; }
+
+export interface Quote {
+  name: string;
+  price: number | string | null;
+  change: number | string | null;
+  changePercent: number | string | null;
+}
 export interface AbortResponse { run_id: string; accepted: boolean; }
 
 export type WsEvent =

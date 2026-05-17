@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from backend.services.registry import RunRegistry, RunStatus
-from backend.services.runner import AnalysisRequest, start_analysis
+from backend.services.runner import AnalysisRequest, _default_graph_factory, start_analysis
 from tradingagents.storage import sqlite_history
 
 
@@ -112,6 +112,43 @@ async def test_abort_drains_chunks_before_aborted_event():
     assert types[-1] == "aborted"
     aborted_idx = types.index("aborted")
     assert "chunk" not in types[aborted_idx + 1:]
+
+
+def test_factory_threads_selected_analysts(monkeypatch):
+    """selected_analysts must reach the TradingAgentsGraph constructor as the
+    positional arg and be removed from the config dict (it is not a config key)."""
+    captured = {}
+
+    class _FakeGraph:
+        def __init__(self, selected_analysts=None, config=None, **kw):
+            captured["selected"] = selected_analysts
+            captured["config"] = config
+
+    import tradingagents.graph.trading_graph as tg
+
+    monkeypatch.setattr(tg, "TradingAgentsGraph", _FakeGraph)
+    _default_graph_factory({"selected_analysts": ["market", "news"], "lookback_days": 30})
+
+    assert captured["selected"] == ["market", "news"]
+    assert "selected_analysts" not in captured["config"]
+    assert captured["config"]["lookback_days"] == 30
+
+
+def test_factory_defaults_when_no_analysts(monkeypatch):
+    """Absent selected_analysts -> engine default ctor (no positional arg)."""
+    captured = {}
+
+    class _FakeGraph:
+        def __init__(self, selected_analysts=None, config=None, **kw):
+            captured["selected"] = selected_analysts
+            captured["config"] = config
+
+    import tradingagents.graph.trading_graph as tg
+
+    monkeypatch.setattr(tg, "TradingAgentsGraph", _FakeGraph)
+    _default_graph_factory({"lookback_days": 30})
+
+    assert captured["selected"] is None
 
 
 @pytest.mark.asyncio

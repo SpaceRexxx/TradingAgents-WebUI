@@ -2,6 +2,7 @@ import type {
   Health, StartAnalysisRequest, StartAnalysisResponse, AbortResponse,
   HistoryListResponse, PatchHistoryRequest, DiffResponse,
   DiagnosticsResponse, ProviderListResponse, SetKeyResponse, TestProviderResponse,
+  Quote,
 } from "./types";
 
 export class ApiError extends Error {
@@ -62,6 +63,12 @@ export const setProviderKey = (id: string, apiKey: string) =>
   req<SetKeyResponse>(`/api/providers/${encodeURIComponent(id)}/key`, jsonBody("POST", { api_key: apiKey }));
 export const testProvider = (id: string) =>
   req<TestProviderResponse>(`/api/providers/${encodeURIComponent(id)}/test`, { method: "POST" });
+
+export const getQuote = async (ticker: string): Promise<Quote | null> => {
+  const resp = await fetch(`/api/quote/${encodeURIComponent(ticker)}`, { method: "GET" });
+  if (resp.status === 204 || !resp.ok) return null;
+  try { return (await resp.json()) as Quote; } catch { return null; }
+};
 
 export const pdfUrl = (ticker: string, tradeDate: string) =>
   `/api/runs/${encodeURIComponent(ticker)}/${encodeURIComponent(tradeDate)}/pdf`;

@@ -24,6 +24,11 @@ def _default_graph_factory(cfg: dict[str, Any]):
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
     merged = {**DEFAULT_CONFIG, **cfg}
+    # `selected_analysts` is a TradingAgentsGraph constructor arg, not a config
+    # key — pull it out of the merged config so the UI can choose analysts.
+    selected = merged.pop("selected_analysts", None)
+    if selected:
+        return TradingAgentsGraph(selected, config=merged)
     return TradingAgentsGraph(config=merged)
 
 

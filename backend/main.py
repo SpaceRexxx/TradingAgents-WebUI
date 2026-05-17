@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.deps import get_settings_dep
-from backend.routes import analysis, diagnostics, health, history, providers, runs
+from backend.routes import analysis, diagnostics, health, history, providers, quote, runs
 from backend.services.registry import RunRegistry
 
 
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(history.router)
     app.include_router(diagnostics.router)
     app.include_router(providers.router)
+    app.include_router(quote.router)
     app.include_router(runs.router)
     return app
 

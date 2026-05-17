@@ -24,7 +24,8 @@ Backend: 2 changes.
    the WS protocol are unchanged.
 
 Frontend: rebuild `AnalysisPage.tsx`; extend `api/types.ts` + `api/client.ts`;
-add a progress-inference util; add localStorage prefs.
+add a progress-inference util (`frontend/src/util/progress.ts` — `src/lib/`
+is gitignored by the repo-wide Python `lib/` rule); add localStorage prefs.
 
 ## Feature -> implementation map
 

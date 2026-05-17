@@ -17,10 +17,11 @@ class FakeWS {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  try { localStorage.removeItem("ta_prefs"); } catch { /* node localStorage quirk */ }
   vi.stubGlobal("WebSocket", FakeWS as unknown as typeof WebSocket);
 });
 
-it("start posts the form, connects stream, renders markdown chunks, reaches done", async () => {
+it("start posts form with config_overrides, streams chunks into agent preview, reaches done", async () => {
   const f = vi.fn().mockResolvedValue({
     ok: true, status: 200, json: async () => ({ run_id: "r1" }),
   } as unknown as Response);
@@ -28,16 +29,26 @@ it("start posts the form, connects stream, renders markdown chunks, reaches done
 
   render(<AnalysisPage />);
   await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
-  await userEvent.type(screen.getByLabelText("交易日期"), "2026-01-02");
+  // 分析日期 defaults to today; no typing needed.
   await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
 
-  await waitFor(() =>
-    expect(f).toHaveBeenCalledWith("/api/analysis/start", expect.objectContaining({ method: "POST" })));
+  await waitFor(() => {
+    const call = f.mock.calls.find((c) => c[0] === "/api/analysis/start");
+    expect(call).toBeTruthy();
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.ticker).toBe("AAPL");
+    expect(body.config_overrides.selected_analysts).toEqual([
+      "market", "social", "news", "fundamentals",
+    ]);
+    expect(body.config_overrides.max_debate_rounds).toBe(2);
+    expect(body.config_overrides.has_position).toBe("未持有");
+  });
   await waitFor(() => expect(FakeWS.last?.url).toContain("/ws/r1"));
 
   FakeWS.last.emit({ type: "status", status: "running" });
   FakeWS.last.emit({ type: "chunk", payload: { market_report: "# Market\nstrong buy" } });
-  await waitFor(() => expect(screen.getByRole("heading", { name: "Market" })).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByRole("heading", { name: "Market" })).toBeInTheDocument());
 
   FakeWS.last.emit({ type: "done", status: "done" });
   await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
@@ -50,11 +61,24 @@ it("abort posts to the abort endpoint", async () => {
   vi.stubGlobal("fetch", f);
   render(<AnalysisPage />);
   await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
-  await userEvent.type(screen.getByLabelText("交易日期"), "2026-01-02");
   await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
   await waitFor(() => expect(FakeWS.last?.url).toContain("/ws/r2"));
   FakeWS.last.emit({ type: "status", status: "running" });
   await userEvent.click(await screen.findByRole("button", { name: "中止" }));
   await waitFor(() =>
     expect(f).toHaveBeenCalledWith("/api/analysis/r2/abort", expect.objectContaining({ method: "POST" })));
+});
+
+it("deselecting all analysts blocks start", async () => {
+  const f = vi.fn().mockResolvedValue({
+    ok: true, status: 200, json: async () => ({ run_id: "r3" }),
+  } as unknown as Response);
+  vi.stubGlobal("fetch", f);
+  render(<AnalysisPage />);
+  await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
+  for (const label of ["市场分析师", "舆情分析师", "新闻分析师", "基本面分析师"]) {
+    await userEvent.click(screen.getByLabelText(label));
+  }
+  await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
+  expect(f.mock.calls.find((c) => c[0] === "/api/analysis/start")).toBeFalsy();
 });
