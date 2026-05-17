@@ -1,4 +1,4 @@
-export interface Health { status: string; }
+export interface Health { status: string; model?: string; provider?: string; }
 export interface StartAnalysisRequest {
   ticker: string; trade_date: string; config_overrides: Record<string, unknown>;
 }
