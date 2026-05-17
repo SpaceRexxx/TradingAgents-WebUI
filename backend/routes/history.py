@@ -29,6 +29,12 @@ def list_history(
     return HistoryListResponse(items=items)
 
 
+@router.post("/reindex")
+def reindex_history() -> dict:
+    settings = get_settings_dep()
+    return history_service.reindex(settings.results_dir)
+
+
 @router.patch("/{ticker}/{trade_date}")
 def patch_history(ticker: str, trade_date: str, body: PatchHistoryRequest) -> dict:
     settings = get_settings_dep()

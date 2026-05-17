@@ -49,6 +49,12 @@ export const patchHistory = (ticker: string, tradeDate: string, b: PatchHistoryR
     jsonBody("PATCH", b)
   );
 
+export const reindexHistory = () =>
+  req<{ recovered: number; indexed: number }>(
+    "/api/history/reindex",
+    { method: "POST" }
+  );
+
 export const getDiff = (t1: string, d1: string, t2: string, d2: string) =>
   req<DiffResponse>(
     `/api/history/${encodeURIComponent(t1)}/${encodeURIComponent(d1)}/diff/${encodeURIComponent(t2)}/${encodeURIComponent(d2)}`,

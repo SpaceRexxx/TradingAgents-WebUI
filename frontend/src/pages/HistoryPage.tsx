@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { listHistory, patchHistory, pdfUrl, getDiff, getCumulativeStats } from "../api/client";
+import {
+  listHistory, patchHistory, pdfUrl, getDiff, getCumulativeStats, reindexHistory,
+} from "../api/client";
 import type { HistoryItem, DiffResponse, CumulativeStats } from "../api/types";
 import StatCard, { fmtInt, fmtCost } from "../components/StatCard";
 import { useAppStore } from "../store/appStore";
@@ -53,6 +55,17 @@ export default function HistoryPage() {
     }
   };
 
+  const reindex = async () => {
+    try {
+      const r = await reindexHistory();
+      pushToast("ok", `重建索引完成：恢复 ${r.recovered}，新增 ${r.indexed}`);
+      load(filter || undefined);
+      getCumulativeStats().then(setCum).catch(() => {});
+    } catch (e: any) {
+      pushToast("err", `重建索引失败: ${e.status ?? e}`);
+    }
+  };
+
   const compare = async () => {
     if (!selA || !selB) return;
     const [tA, dA] = selA.split("|");
@@ -89,6 +102,7 @@ export default function HistoryPage() {
       <div className="row">
         <input placeholder="按 ticker 过滤" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <button className="btn" onClick={() => load(filter || undefined)}>查询</button>
+        <button className="btn-ghost" onClick={reindex}>重建索引</button>
       </div>
       {loading && <p className="muted">加载中…</p>}
       {!loading && errored && (
