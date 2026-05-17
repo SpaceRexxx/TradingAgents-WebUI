@@ -14,7 +14,7 @@ Two pieces verified:
 import os
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from langchain_core.prompt_values import ChatPromptValue
 from pydantic import BaseModel
 
@@ -114,6 +114,61 @@ class TestDeepSeekReasoningContent:
         payload = client._get_request_payload(prompt_value)
         assistant_dicts = [m for m in payload["messages"] if m.get("role") == "assistant"]
         assert assistant_dicts[0]["reasoning_content"] == "weighed bull case"
+
+    def test_capture_reasoning_content_from_streaming_delta(self):
+        client = self._client()
+        chunk = client._convert_chunk_to_generation_chunk(
+            {
+                "choices": [
+                    {
+                        "delta": {"role": "assistant", "reasoning_content": "streamed thought"},
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            AIMessageChunk,
+            {},
+        )
+        assert chunk is not None
+        assert chunk.text == ""
+        assert chunk.message.additional_kwargs["reasoning_content"] == "streamed thought"
+
+    def test_streaming_reasoning_chunks_merge_for_next_turn_payload(self):
+        client = self._client()
+        reasoning = client._convert_chunk_to_generation_chunk(
+            {
+                "choices": [
+                    {
+                        "delta": {"role": "assistant", "reasoning_content": "a"},
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            AIMessageChunk,
+            {},
+        )
+        content = client._convert_chunk_to_generation_chunk(
+            {
+                "choices": [
+                    {
+                        "delta": {"content": "answer"},
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            AIMessageChunk,
+            {},
+        )
+
+        merged = reasoning.message + content.message
+        assert merged.content == "answer"
+        assert merged.additional_kwargs["reasoning_content"] == "a"
+
+        payload = client._get_request_payload(
+            [AIMessage(content=merged.content, additional_kwargs=merged.additional_kwargs)]
+        )
+        assistant_dicts = [m for m in payload["messages"] if m.get("role") == "assistant"]
+        assert assistant_dicts[0]["reasoning_content"] == "a"
 
 
 # ---------------------------------------------------------------------------

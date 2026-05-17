@@ -34,6 +34,21 @@ function fmtElapsed(sec: number): string {
   return m > 0 ? `${m} 分 ${s} 秒` : `${s} 秒`;
 }
 
+function age(ts: number | null): string {
+  if (!ts) return "尚无";
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  return fmtElapsed(sec);
+}
+
+function activityKind(kind?: string): string {
+  return kind === "thinking" ? "模型思考中" : kind === "started" ? "已开始调用模型" : "有活动";
+}
+
+function closeSummary(code: number, reason: string, wasClean: boolean): string {
+  const label = wasClean ? "正常关闭" : "异常关闭";
+  return reason ? `${label} ${code}: ${reason}` : `${label} ${code}`;
+}
+
 function num(v: unknown): string {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
@@ -79,7 +94,7 @@ export default function AnalysisPage() {
 
   // Default the preview to the first running (or first completed) agent.
   useEffect(() => {
-    if (selectedAgent && progress.agents.find((a) => a.key === selectedAgent)?.content) return;
+    if (selectedAgent) return;
     const active =
       progress.agents.find((a) => a.status === "running" && a.content) ||
       progress.agents.find((a) => a.content);
@@ -143,6 +158,13 @@ export default function AnalysisPage() {
   const quoteUp =
     quote && typeof quote.change === "number" ? quote.change >= 0 : true;
   const active = progress.agents.find((a) => a.key === selectedAgent);
+  const activeActivity =
+    active && stream.lastActivity?.agent === active.key ? stream.lastActivity : null;
+  const stale = running && stream.lastEventAt !== null && Date.now() - stream.lastEventAt > 90000;
+  const noHeartbeat = stale && stream.pingCount === 0;
+  const staleReason = noHeartbeat
+    ? "超过 90 秒无后端消息且未收到心跳，优先检查 WebSocket 或后端连接"
+    : "超过 90 秒无后端消息，可能卡住或网络断开";
 
   return (
     <div className="col">
@@ -296,6 +318,26 @@ export default function AnalysisPage() {
                 : `错误: ${stream.error}`}
             </span>
           </div>
+          {running && (
+            <div className="row" style={{ gap: "var(--sp-4)", flexWrap: "wrap", color: stale ? "var(--c-warn)" : "var(--c-text-dim)", fontSize: "var(--fz-sm)" }}>
+              <span>最近消息：{age(stream.lastEventAt)}前</span>
+              <span>最近正文：{age(stream.lastChunkAt)}前</span>
+              <span>心跳：{stream.pingCount > 0 ? `${age(stream.lastPingAt)}前` : "等待中"}</span>
+              <span>事件：{stream.chunkCount}</span>
+              {stream.lastClose && (
+                <span>
+                  连接：{closeSummary(stream.lastClose.code, stream.lastClose.reason, stream.lastClose.wasClean)}
+                </span>
+              )}
+              {stream.lastActivity && (
+                <span>
+                  {progress.agents.find((a) => a.key === stream.lastActivity?.agent)?.label ?? stream.lastActivity.agent}
+                  ：{activityKind(stream.lastActivity.kind)}
+                </span>
+              )}
+              {stale && <span>{staleReason}</span>}
+            </div>
+          )}
           <div
             style={{
               height: 6,
@@ -344,9 +386,27 @@ export default function AnalysisPage() {
                 <Markdown>{active.content}</Markdown>
               </>
             ) : (
-              <span style={{ color: "var(--c-text-dim)" }}>
-                {active ? `${active.label} · 正在执行中，预计很快有内容…` : "等待分析开始…"}
-              </span>
+              <div className="col" style={{ gap: 6, color: "var(--c-text-dim)" }}>
+                <span>
+                  {active
+                    ? `${active.label} · ${
+                        activeActivity
+                          ? activityKind(activeActivity.kind)
+                          : active.status === "running"
+                          ? "正在执行中"
+                          : "暂无内容"
+                      }`
+                    : "等待分析开始…"}
+                </span>
+                {running && (
+                  <span style={{ fontSize: "var(--fz-sm)" }}>
+                    最近消息 {age(stream.lastEventAt)}前 · 最近正文 {age(stream.lastChunkAt)}前 · 心跳 {stream.pingCount > 0 ? `${age(stream.lastPingAt)}前` : "等待中"}
+                    {stream.lastClose
+                      ? ` · 连接 ${closeSummary(stream.lastClose.code, stream.lastClose.reason, stream.lastClose.wasClean)}`
+                      : ""}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -109,6 +109,7 @@ class TradingAgentsGraph:
             llm_kwargs["api_key"] = str(api_key).strip()
         if self.callbacks:
             llm_kwargs["callbacks"] = self.callbacks
+            llm_kwargs["streaming"] = True
         llm_kwargs["http_client"] = custom_http_client
         llm_kwargs["timeout"] = 900
         llm_kwargs["max_retries"] = 5

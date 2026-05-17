@@ -45,6 +45,11 @@ function sub(r: Record<string, unknown>, parent: string, child: string): string 
   return "";
 }
 
+function isStreaming(r: Record<string, unknown>, key: string): boolean {
+  const state = r.__streaming;
+  return Boolean(state && typeof state === "object" && (state as Record<string, unknown>)[key]);
+}
+
 const AGENT_DEFS: AgentDef[] = [
   { key: "market", label: "市场分析师", phase: "analysts", extract: (r) => str(r.market_report) },
   { key: "social", label: "舆情分析师", phase: "analysts", extract: (r) => str(r.sentiment_report) },
@@ -86,6 +91,8 @@ export function deriveProgress(
   running: boolean,
 ): Progress {
   const contents = AGENT_DEFS.map((a) => a.extract(report));
+  const streaming = AGENT_DEFS.map((a) => isStreaming(report, a.key));
+  const anyStreaming = streaming.some(Boolean);
   // Frontier = index of the last agent that has produced content.
   let frontier = -1;
   contents.forEach((c, i) => {
@@ -94,9 +101,11 @@ export function deriveProgress(
 
   const agents: AgentView[] = AGENT_DEFS.map((a, i) => {
     let status: AgentStatus;
-    if (contents[i]) {
+    if (contents[i] && streaming[i]) {
+      status = "running";
+    } else if (contents[i]) {
       status = "done";
-    } else if (running && i === frontier + 1) {
+    } else if (running && !anyStreaming && i === frontier + 1) {
       status = "running";
     } else {
       status = "pending";

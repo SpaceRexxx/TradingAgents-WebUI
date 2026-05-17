@@ -245,7 +245,7 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
     if decision.price_target is not None:
-        parts.extend(["", f"**Price Target / Resistance**: {decision.price_target}"])
+        parts.extend(["", f"**Price Target**: {decision.price_target}"])
     if decision.stop_loss is not None:
         parts.extend(["", f"**Stop Loss**: {decision.stop_loss}"])
     if decision.breakout_point is not None:

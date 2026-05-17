@@ -43,7 +43,7 @@ def create_portfolio_manager(llm):
 
         past_context = state.get("past_context", "")
         lessons_line = (
-            f"**过往决策与结果反思:**\n{past_context}\n"
+            f"**Lessons from prior decisions and outcomes（过往决策与结果反思）:**\n{past_context}\n"
             if past_context
             else "**过往决策与结果反思:** 未找到相关历史交易记忆。\n"
         )
