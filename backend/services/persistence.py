@@ -17,6 +17,7 @@ def persist_run(
     final_state: dict[str, Any],
     model: str | None = None,
     provider: str | None = None,
+    token_stats: dict[str, Any] | None = None,
 ) -> Path:
     """Write final_state_report.json and index it in sqlite_history.
 
@@ -28,6 +29,8 @@ def persist_run(
     save_path.mkdir(parents=True, exist_ok=True)
 
     serializable = {k: v for k, v in final_state.items() if k != "messages"}
+    if token_stats is not None:
+        serializable["token_stats"] = token_stats
     json_path = save_path / "final_state_report.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(serializable, f, ensure_ascii=False, indent=4)

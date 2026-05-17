@@ -35,10 +35,15 @@ class RunHandle:
         self.status = RunStatus.RUNNING
         await self.emit({"type": "status", "status": "running"})
 
-    async def mark_done(self, final_state: dict[str, Any]) -> None:
+    async def mark_done(
+        self, final_state: dict[str, Any], token_stats: dict[str, Any] | None = None
+    ) -> None:
         self.status = RunStatus.DONE
         self.final_state = final_state
-        await self.emit({"type": "done", "status": "done"})
+        event: dict[str, Any] = {"type": "done", "status": "done"}
+        if token_stats is not None:
+            event["token_stats"] = token_stats
+        await self.emit(event)
 
     async def mark_error(self, message: str) -> None:
         self.status = RunStatus.ERROR

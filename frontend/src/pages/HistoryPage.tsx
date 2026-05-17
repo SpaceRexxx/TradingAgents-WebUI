@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { listHistory, patchHistory, pdfUrl, getDiff } from "../api/client";
-import type { HistoryItem, DiffResponse } from "../api/types";
+import { listHistory, patchHistory, pdfUrl, getDiff, getCumulativeStats } from "../api/client";
+import type { HistoryItem, DiffResponse, CumulativeStats } from "../api/types";
+import StatCard, { fmtInt, fmtCost } from "../components/StatCard";
 import { useAppStore } from "../store/appStore";
 
 export default function HistoryPage() {
@@ -14,6 +15,7 @@ export default function HistoryPage() {
   const [selA, setSelA] = useState("");
   const [selB, setSelB] = useState("");
   const [diffResult, setDiffResult] = useState<DiffResponse | null>(null);
+  const [cum, setCum] = useState<CumulativeStats | null>(null);
   const pushToast = useAppStore((s) => s.pushToast);
 
   const load = useCallback((ticker?: string) => {
@@ -26,6 +28,10 @@ export default function HistoryPage() {
   }, [pushToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    getCumulativeStats().then(setCum).catch(() => setCum(null));
+  }, []);
 
   const open = (it: HistoryItem) => {
     setSelected(it);
@@ -62,6 +68,24 @@ export default function HistoryPage() {
   return (
     <div className="col">
       <h2>历史分析</h2>
+      {cum && (
+        <StatCard
+          title="累计统计（所有分析）"
+          metrics={[
+            { label: "输入 tokens", value: fmtInt(cum.input_tokens) },
+            { label: "输出 tokens", value: fmtInt(cum.output_tokens) },
+            { label: "总 tokens", value: fmtInt(cum.total_tokens) },
+            { label: "估算成本 (USD)", value: fmtCost(cum.cost_usd) },
+            { label: "工具调用次数", value: fmtInt(cum.tool_calls) },
+          ]}
+          footer={
+            <span>
+              📦 来源：{fmtInt(cum.runs)} 次分析累计 · 数据存于{" "}
+              <code>cumulative_stats.json</code>
+            </span>
+          }
+        />
+      )}
       <div className="row">
         <input placeholder="按 ticker 过滤" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <button className="btn" onClick={() => load(filter || undefined)}>查询</button>

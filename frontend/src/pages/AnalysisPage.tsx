@@ -4,6 +4,7 @@ import { useAnalysisStream } from "../hooks/useAnalysisStream";
 import { usePrefs } from "../hooks/usePrefs";
 import { deriveProgress, type AgentStatus } from "../util/progress";
 import Markdown from "../components/Markdown";
+import StatCard, { fmtInt, fmtCost } from "../components/StatCard";
 import { useAppStore } from "../store/appStore";
 import type { Quote } from "../api/types";
 
@@ -35,6 +36,15 @@ function fmtElapsed(sec: number): string {
 
 function num(v: unknown): string {
   return v === null || v === undefined || v === "" ? "—" : String(v);
+}
+
+function freshness(tradeDate: string): string {
+  const t = Date.parse(tradeDate);
+  if (Number.isNaN(t)) return "";
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return "数据新鲜度：当日实时";
+  if (days <= 3) return `数据新鲜度：${days} 天前 · 近期数据`;
+  return `数据新鲜度：${days} 天前 · 历史回顾`;
 }
 
 export default function AnalysisPage() {
@@ -142,9 +152,9 @@ export default function AnalysisPage() {
       <div className="card col" style={{ gap: "var(--sp-3)" }}>
         <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
           <label className="col" style={{ gap: 4, flex: 1, minWidth: 200 }}>
-            Ticker
+            股票代码
             <input
-              aria-label="Ticker"
+              aria-label="股票代码"
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
               onBlur={fetchQuote}
@@ -340,6 +350,33 @@ export default function AnalysisPage() {
             )}
           </div>
         </div>
+      )}
+
+      {stream.status === "done" && stream.tokenStats && (
+        <StatCard
+          title="本次分析透明度"
+          metrics={[
+            { label: "输入 tokens", value: fmtInt(stream.tokenStats.input_tokens) },
+            { label: "输出 tokens", value: fmtInt(stream.tokenStats.output_tokens) },
+            { label: "总 tokens", value: fmtInt(stream.tokenStats.total_tokens) },
+            { label: "估算成本 (USD)", value: fmtCost(stream.tokenStats.cost_usd) },
+            { label: "工具调用次数", value: fmtInt(stream.tokenStats.tool_call_count) },
+          ]}
+          footer={
+            <div className="col" style={{ gap: 2 }}>
+              {Object.keys(stream.tokenStats.tool_calls).length > 0 && (
+                <span>
+                  📡 数据源调用：
+                  {Object.entries(stream.tokenStats.tool_calls)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([n, c]) => `${n}×${c}`)
+                    .join(" · ")}
+                </span>
+              )}
+              <span>📅 {freshness(tradeDate)}</span>
+            </div>
+          }
+        />
       )}
 
       {stream.status === "done" && runId && ticker && tradeDate && (

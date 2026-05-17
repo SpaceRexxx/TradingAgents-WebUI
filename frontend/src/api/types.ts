@@ -12,10 +12,28 @@ export interface Quote {
 }
 export interface AbortResponse { run_id: string; accepted: boolean; }
 
+export interface TokenStats {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  tool_calls: Record<string, number>;
+  tool_call_count: number;
+}
+
+export interface CumulativeStats {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  tool_calls: number;
+  runs: number;
+}
+
 export type WsEvent =
   | { type: "status"; status: string }
   | { type: "chunk"; payload: Record<string, unknown> }
-  | { type: "done"; status: string }
+  | { type: "done"; status: string; token_stats?: TokenStats }
   | { type: "aborted" }
   | { type: "error"; message: string }
   | { type: "ping" };

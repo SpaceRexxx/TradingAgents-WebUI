@@ -154,6 +154,20 @@ it("shows inline error and retry button on initial load failure", async () => {
   expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
 });
 
+it("renders the cumulative stats card", async () => {
+  vi.stubGlobal("fetch", fetchMock((url) =>
+    url.includes("/api/stats/cumulative")
+      ? { input_tokens: 32864, output_tokens: 22619, total_tokens: 53353,
+          cost_usd: 0.1007, tool_calls: 0, runs: 15 }
+      : { items: [ITEM] }));
+  render(<HistoryPage />);
+  await waitFor(() =>
+    expect(screen.getByText("累计统计（所有分析）")).toBeInTheDocument());
+  expect(screen.getByText("53,353")).toBeInTheDocument();
+  expect(screen.getByText("$0.1007")).toBeInTheDocument();
+  expect(screen.getByText(/15 次分析累计/)).toBeInTheDocument();
+});
+
 it("retry button re-calls /api/history", async () => {
   const f = vi.fn()
     .mockRejectedValueOnce({ status: 500 })

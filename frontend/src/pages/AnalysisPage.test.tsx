@@ -28,7 +28,7 @@ it("start posts form with config_overrides, streams chunks into agent preview, r
   vi.stubGlobal("fetch", f);
 
   render(<AnalysisPage />);
-  await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
+  await userEvent.type(screen.getByLabelText("股票代码"), "AAPL");
   // 分析日期 defaults to today; no typing needed.
   await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
 
@@ -50,8 +50,19 @@ it("start posts form with config_overrides, streams chunks into agent preview, r
   await waitFor(() =>
     expect(screen.getByRole("heading", { name: "Market" })).toBeInTheDocument());
 
-  FakeWS.last.emit({ type: "done", status: "done" });
+  FakeWS.last.emit({
+    type: "done",
+    status: "done",
+    token_stats: {
+      input_tokens: 6110, output_tokens: 3975, total_tokens: 10085,
+      cost_usd: 0.018, tool_calls: { get_news: 2 }, tool_call_count: 2,
+    },
+  });
   await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
+  expect(screen.getByText("本次分析透明度")).toBeInTheDocument();
+  expect(screen.getByText("10,085")).toBeInTheDocument();
+  expect(screen.getByText("$0.0180")).toBeInTheDocument();
+  expect(screen.getByText(/数据新鲜度/)).toBeInTheDocument();
 });
 
 it("abort posts to the abort endpoint", async () => {
@@ -60,7 +71,7 @@ it("abort posts to the abort endpoint", async () => {
   } as unknown as Response);
   vi.stubGlobal("fetch", f);
   render(<AnalysisPage />);
-  await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
+  await userEvent.type(screen.getByLabelText("股票代码"), "AAPL");
   await userEvent.click(screen.getByRole("button", { name: "开始分析" }));
   await waitFor(() => expect(FakeWS.last?.url).toContain("/ws/r2"));
   FakeWS.last.emit({ type: "status", status: "running" });
@@ -75,7 +86,7 @@ it("deselecting all analysts blocks start", async () => {
   } as unknown as Response);
   vi.stubGlobal("fetch", f);
   render(<AnalysisPage />);
-  await userEvent.type(screen.getByLabelText("Ticker"), "AAPL");
+  await userEvent.type(screen.getByLabelText("股票代码"), "AAPL");
   for (const label of ["市场分析师", "舆情分析师", "新闻分析师", "基本面分析师"]) {
     await userEvent.click(screen.getByLabelText(label));
   }

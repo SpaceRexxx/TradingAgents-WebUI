@@ -2,7 +2,7 @@ import type {
   Health, StartAnalysisRequest, StartAnalysisResponse, AbortResponse,
   HistoryListResponse, PatchHistoryRequest, DiffResponse,
   DiagnosticsResponse, ProviderListResponse, SetKeyResponse, TestProviderResponse,
-  Quote,
+  Quote, CumulativeStats,
 } from "./types";
 
 export class ApiError extends Error {
@@ -69,6 +69,9 @@ export const getQuote = async (ticker: string): Promise<Quote | null> => {
   if (resp.status === 204 || !resp.ok) return null;
   try { return (await resp.json()) as Quote; } catch { return null; }
 };
+
+export const getCumulativeStats = () =>
+  req<CumulativeStats>("/api/stats/cumulative", { method: "GET" });
 
 export const pdfUrl = (ticker: string, tradeDate: string) =>
   `/api/runs/${encodeURIComponent(ticker)}/${encodeURIComponent(tradeDate)}/pdf`;

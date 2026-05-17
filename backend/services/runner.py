@@ -8,6 +8,7 @@ from typing import Any, Callable
 from backend.deps import get_settings_dep
 from backend.services.persistence import persist_run
 from backend.services.registry import RunHandle, RunRegistry
+from backend.services.token_stats import TokenAccumulator, accumulate_cumulative
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,13 @@ async def _run(
 
     # Track in-flight chunk futures so we can drain them before marking done.
     _chunk_futures: list[concurrent.futures.Future] = []
+    token_acc = TokenAccumulator()
 
     def _emit_chunk(chunk: dict[str, Any]) -> None:
+        # Accumulate token/tool stats here while `chunk` still holds the raw
+        # LangChain message objects (usage_metadata is lost after JSON WS
+        # serialization downstream).
+        token_acc.feed(chunk)
         # Bridge sync engine callback to the asyncio queue.
         coro = handle.emit({"type": "chunk", "payload": chunk})
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -112,6 +118,8 @@ async def _run(
 
     await _drain()
 
+    token_stats = token_acc.result(engine_meta.get("model"))
+
     results_dir = engine_meta.get("results_dir")
     if results_dir:
         try:
@@ -123,8 +131,13 @@ async def _run(
                 final_state,
                 engine_meta.get("model"),
                 engine_meta.get("provider"),
+                token_stats,
             )
         except Exception:
             logger.exception("Persist failed for %s", handle.run_id)
+        try:
+            await asyncio.to_thread(accumulate_cumulative, results_dir, token_stats)
+        except Exception:
+            logger.exception("Cumulative stats update failed for %s", handle.run_id)
 
-    await handle.mark_done(final_state)
+    await handle.mark_done(final_state, token_stats)

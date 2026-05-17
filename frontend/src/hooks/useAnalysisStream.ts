@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { WsEvent } from "../api/types";
+import type { WsEvent, TokenStats } from "../api/types";
 
 export type StreamStatus = "idle" | "running" | "done" | "aborted" | "error";
 
@@ -8,6 +8,7 @@ export interface StreamState {
   report: Record<string, unknown>;
   error: string | null;
   chunkCount: number;
+  tokenStats: TokenStats | null;
   connect: (runId: string) => void;
   disconnect: () => void;
 }
@@ -22,6 +23,7 @@ export function useAnalysisStream(): StreamState {
   const [report, setReport] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
   const [chunkCount, setChunkCount] = useState(0);
+  const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const disconnect = useCallback(() => {
@@ -31,6 +33,7 @@ export function useAnalysisStream(): StreamState {
     setReport({});
     setError(null);
     setChunkCount(0);
+    setTokenStats(null);
   }, []);
 
   const connect = useCallback((runId: string) => {
@@ -39,6 +42,7 @@ export function useAnalysisStream(): StreamState {
     setReport({});
     setError(null);
     setChunkCount(0);
+    setTokenStats(null);
     const ws = new WebSocket(wsUrl(runId));
     wsRef.current = ws;
     ws.onmessage = (e: MessageEvent) => {
@@ -52,6 +56,7 @@ export function useAnalysisStream(): StreamState {
           setChunkCount((n) => n + 1);
           break;
         case "done":
+          if (ev.token_stats) setTokenStats(ev.token_stats);
           setStatus("done"); ws.close(); break;
         case "aborted":
           setStatus("aborted"); ws.close(); break;
@@ -64,5 +69,5 @@ export function useAnalysisStream(): StreamState {
     ws.onerror = () => { setStatus("error"); setError("WebSocket connection error"); };
   }, []);
 
-  return { status, report, error, chunkCount, connect, disconnect };
+  return { status, report, error, chunkCount, tokenStats, connect, disconnect };
 }
