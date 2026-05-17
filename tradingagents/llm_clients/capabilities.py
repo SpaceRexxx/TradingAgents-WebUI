@@ -54,12 +54,6 @@ _DEEPSEEK_THINKING = ModelCapabilities(
     requires_reasoning_content_roundtrip=True,
 )
 
-_DEEPSEEK_CHAT = ModelCapabilities(
-    supports_tool_choice=True,
-    supports_json_mode=True,
-    supports_json_schema=False,
-    preferred_structured_method="function_calling",
-)
 
 # MiniMax M2.x reasoning models accept the tools array, but their
 # tool_choice parameter is restricted to the enum {"none", "auto"}
@@ -86,8 +80,6 @@ _DEFAULT = ModelCapabilities(
 
 # Exact-ID matches take precedence over pattern matches.
 _BY_ID: dict[str, ModelCapabilities] = {
-    "deepseek-chat": _DEEPSEEK_CHAT,
-    "deepseek-reasoner": _DEEPSEEK_THINKING,
     "deepseek-v4-flash": _DEEPSEEK_THINKING,
     "deepseek-v4-pro": _DEEPSEEK_THINKING,
     # MiniMax — full official model lineup per
@@ -101,11 +93,10 @@ _BY_ID: dict[str, ModelCapabilities] = {
     "MiniMax-M2": _MINIMAX_THINKING,
 }
 
-# Forward-compat patterns. New ``deepseek-v5-*`` / ``deepseek-reasoner-*``
-# or ``MiniMax-M3*`` variants inherit the thinking-mode quirks automatically.
+# Forward-compat patterns. New ``deepseek-v5-*`` or ``MiniMax-M3*``
+# variants inherit the thinking-mode quirks automatically.
 _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"^deepseek-v\d"), _DEEPSEEK_THINKING),
-    (re.compile(r"^deepseek-reasoner"), _DEEPSEEK_THINKING),
     (re.compile(r"^MiniMax-M\d"), _MINIMAX_THINKING),
 ]
 

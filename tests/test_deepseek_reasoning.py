@@ -142,17 +142,6 @@ class TestStructuredOutputCapabilityDispatch:
             model=model, api_key="placeholder", base_url="https://api.deepseek.com",
         )
 
-    def test_chat_sends_tool_choice(self):
-        bound = self._client("deepseek-chat").with_structured_output(self._Sample)
-        assert _bound_kwargs(bound).get("tool_choice") is not None
-
-    def test_reasoner_suppresses_tool_choice(self):
-        bound = self._client("deepseek-reasoner").with_structured_output(self._Sample)
-        # tool_choice is either absent or explicitly None — both are valid
-        # signals that langchain's bind_tools will skip the parameter.
-        assert _bound_kwargs(bound).get("tool_choice") in (None, ...) or \
-            "tool_choice" not in _bound_kwargs(bound)
-
     def test_v4_flash_suppresses_tool_choice(self):
         bound = self._client("deepseek-v4-flash").with_structured_output(self._Sample)
         assert _bound_kwargs(bound).get("tool_choice") is None or \
@@ -172,7 +161,7 @@ class TestStructuredOutputCapabilityDispatch:
     def test_schema_is_still_bound_as_tool(self):
         """tool_choice is suppressed, but the schema is still bound as a tool —
         exactly matching DeepSeek's official tool-calling examples."""
-        bound = self._client("deepseek-reasoner").with_structured_output(self._Sample)
+        bound = self._client("deepseek-v4-pro").with_structured_output(self._Sample)
         kwargs = _bound_kwargs(bound)
         tools = kwargs.get("tools", [])
         assert any(

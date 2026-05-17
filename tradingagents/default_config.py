@@ -51,8 +51,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "memory_log_max_entries": None,
     # LLM settings
     "llm_provider": "DeepSeek",
-    "deep_think_llm": "deepseek-chat",
-    "quick_think_llm": "deepseek-reasoner",
+    "deep_think_llm": "deepseek-v4-pro",
+    "quick_think_llm": "deepseek-v4-flash",
     # When None, each provider's client falls back to its own default endpoint.
     # The WebUI and CLI override this per provider at runtime.
     "backend_url": "https://api.deepseek.com/v1",

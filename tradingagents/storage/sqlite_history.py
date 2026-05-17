@@ -91,6 +91,13 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE analyses ADD COLUMN note TEXT")
     except Exception:
         pass
+    # 兼容旧表：如缺少 user_rating 列就补
+    try:
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(analyses)")}
+        if "user_rating" not in cols:
+            conn.execute("ALTER TABLE analyses ADD COLUMN user_rating TEXT")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +275,26 @@ def set_note(results_dir: Path | str, ticker: str, trade_date: str, note: str) -
             "UPDATE analyses SET note = ? WHERE ticker = ? AND trade_date = ?",
             (note, ticker, trade_date),
         )
+
+
+def set_rating(results_dir: Path | str, ticker: str, trade_date: str, rating: str) -> bool:
+    """Set a user-supplied rating on a stored analysis.
+
+    Distinct from the auto-extracted `rating` column (populated from the
+    analysis text by `_extract_rating`); this is for the end user's own
+    rating, e.g., "good", "bad", "needs-revision".
+
+    Returns True if a matching row was updated, False if no analysis with
+    that ticker+trade_date is indexed.
+    """
+    results_dir = Path(results_dir)
+    with _connect(results_dir) as conn:
+        _init_schema(conn)
+        cur = conn.execute(
+            "UPDATE analyses SET user_rating = ? WHERE ticker = ? AND trade_date = ?",
+            (rating, ticker, trade_date),
+        )
+        return cur.rowcount > 0
 
 
 def get_note(results_dir: Path | str, ticker: str, trade_date: str) -> str:

@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import asyncio
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+
+from backend.deps import get_registry
+from backend.schemas import AbortResponse, StartAnalysisRequest, StartAnalysisResponse
+from backend.services.registry import RunRegistry
+from backend.services.runner import AnalysisRequest, start_analysis
+
+router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+
+
+@router.post("/start", response_model=StartAnalysisResponse)
+async def start(
+    body: StartAnalysisRequest,
+    registry: RunRegistry = Depends(get_registry),
+) -> StartAnalysisResponse:
+    handle = await start_analysis(
+        AnalysisRequest(
+            ticker=body.ticker,
+            trade_date=body.trade_date,
+            config_overrides=body.config_overrides,
+        ),
+        registry,
+    )
+    return StartAnalysisResponse(run_id=handle.run_id)
+
+
+@router.post("/{run_id}/abort", response_model=AbortResponse)
+async def abort(
+    run_id: str,
+    registry: RunRegistry = Depends(get_registry),
+) -> AbortResponse:
+    handle = registry.get(run_id)
+    if handle is None:
+        raise HTTPException(status_code=404, detail="run_id not found")
+    handle.cancel_event.set()
+    return AbortResponse(run_id=run_id, accepted=True)
+
+
+@router.websocket("/ws/{run_id}")
+async def stream(websocket: WebSocket, run_id: str) -> None:
+    await websocket.accept()
+    registry: RunRegistry = websocket.app.state.registry
+    handle = registry.get(run_id)
+    if handle is None:
+        await websocket.close(code=4404)
+        return
+
+    if handle.is_terminal():
+        # Drain any events that were queued before this late subscriber
+        # connected, then emit a synthetic terminal event if none was found.
+        found_terminal = False
+        while not handle.queue.empty():
+            event = handle.queue.get_nowait()
+            await websocket.send_text(json.dumps(event, default=str))
+            if event["type"] in {"done", "aborted", "error"}:
+                found_terminal = True
+                break
+        if not found_terminal:
+            payload: dict = {"type": handle.status.value}
+            if handle.status.value == "error" and handle.error:
+                payload["message"] = handle.error
+            await websocket.send_text(json.dumps(payload, default=str))
+        await websocket.close()
+        # Evict now that all buffered events are flushed; safe because we are
+        # inside the is_terminal() guard. Mirrors the finally-block eviction.
+        registry.drop(run_id)
+        return
+
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(handle.queue.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                continue
+            await websocket.send_text(json.dumps(event, default=str))
+            if event["type"] in {"done", "aborted", "error"}:
+                break
+    except WebSocketDisconnect:
+        return
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        # Best-effort eviction: only drop once the run itself is terminal,
+        # so a client disconnecting mid-run does not remove a live handle.
+        # Caveat: with multiple concurrent WS subscribers the first to finish
+        # evicts the handle for the rest — acceptable under the Step 1a
+        # single-user model.
+        if handle is not None and handle.is_terminal():
+            registry.drop(run_id)

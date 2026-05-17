@@ -2,214 +2,210 @@
   <img src="assets/TauricResearch.png" style="width: 60%; height: auto;">
 </p>
 
-# 📈 TradingAgents (WebUI版)
+# 📈 TradingAgents (WebUI 版)
 
-本项目是基于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 衍生并进行深度重构优化的增强版本。原项目构筑了优秀的 AI 交易员多智能体框架，本项目在此基础上进行了大量底层架构修复和本土化模型扩展。
+本项目基于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) 衍生并深度重构。原项目构筑了优秀的 AI 交易员多智能体框架，本项目在此基础上完成了**前后端分离架构升级**、大量底层修复与本土化模型/数据扩展。
 
-## 🌟 核心增强特性 (New Features by SpaceRexxx)
-- **原生并行化与沙盒引擎**：彻底修复原版多智能体并行运行时的 `INVALID_CONCURRENT_GRAPH_UPDATE` 内存污染与图谱幻觉冲突，四位分析师真正实现 100% 稳定的并发拉取与推演。
-- **全方位大模型支持**：无缝接入 **DeepSeek V4 (Flash / Pro)**、**小米 MiMo v2.5 Pro**、NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI、Anthropic、Google Gemini、Qwen、GLM、MiniMax、OpenRouter、Azure、Ollama 等全主流供应商，思考模型 `reasoning_content` round-trip 已就绪。
-- **A 股原生数据栈**：A 股标的自动切换到本土数据源 —— akshare 千股千评 + 雪球讨论（OpenCLI）替代 StockTwits/Reddit、新浪财经宏观 + 东方财富公告 + 财联社替代 Yahoo Finance；美股/港股保持原有方案。
-- **v2.0 全新 Web UI**：里程碑式进度条 + 实时 JS 计时器、竖向左侧代理 Tab（纯客户端切换，不打断流式输出）、历史分析一键跳转分析中心、配置页单行布局，分析师选择改为四个独立 Checkbox。
-- **动态 Web UI 面板**：支持通过配置 Tab 直观注入不同供应商的 API Key，彻底接管系统环境变量。分析结尾**可视化报告渲染与一键导出 PDF**，SQLite 历史索引支持评级筛选、备注与 A/B 对比。
-- **底层架构极限重构**：
-  - 屏蔽 HTTP/2 降级干扰解决 `openai.APIConnectionError` 报错。
-  - 重构 `memory.py` 消除全局变量状态逃逸。
-  - 弃用前沿语法，改用原生 `SystemMessage` 对象注入，完美向下兼容旧版本 `langgraph` (解决 `state_modifier` kwargs 报错)。
-  - 强化数据流：增加并修复了 `obv` (能量潮) 等关键指标的数据别名映射。
-- **CLI 深度优化**：显式模块导入替代通配符 `import *`、流式 chunk 增量 merge（零内存冗余）、代理状态机精确修复、所有内联 import 提升至顶层。
+> **v2.0 架构**：Streamlit 单体已退役并移除，现为 **FastAPI 后端 + React SPA 前端**，CLI 保持独立可用。
+
+## 🌟 核心增强特性
+
+- **前后端分离架构 (v2.0)**：FastAPI 后端（REST + WebSocket，封装引擎、SQLite 历史索引、持久化、按需 PDF）+ React + TypeScript SPA 前端（Vite、Zustand、React Router）。前端以 WebSocket 流式渲染，不再依赖 Streamlit rerun。
+- **原生并行化与沙盒引擎**：彻底修复原版多智能体并行运行时的 `INVALID_CONCURRENT_GRAPH_UPDATE` 内存污染与图谱幻觉冲突，四位分析师真正实现 100% 稳定并发。
+- **全方位大模型支持**：DeepSeek V4 (Flash / Pro)、小米 MiMo v2.5 Pro、NVIDIA DeepSeek V3、火山引擎 (Volcengine/Ark)、OpenAI、Anthropic、Google Gemini、Qwen、GLM、MiniMax、OpenRouter、xAI、Azure、Ollama，思考模型 `reasoning_content` round-trip 已就绪。
+- **A 股原生数据栈**：A 股标的自动切换本土数据源 —— akshare 千股千评 + 雪球讨论（OpenCLI）替代 StockTwits/Reddit，新浪财经宏观 + 东方财富公告 + 财联社替代 Yahoo Finance；美股/港股保持原方案。
+- **分析中心全功能还原**：分析师 Checkbox、研究深度、价格/新闻回溯滑块、日期选择器、持仓开关、实时价格 + 中文名、里程碑进度条 + 实时计时器、竖向 Agent 侧栏（点击预览、状态 ⚪/⏳/✅）、本次分析 Token/成本透明度卡片。
+- **历史与可观测**：SQLite 历史索引（评级筛选、备注、A/B 分节对比）、累计 Token/成本统计卡片、一键「重建索引」恢复未入库分析、按需 PDF 研报、数据源诊断页。
+- **底层重构**：屏蔽 HTTP/2 降级解决 `openai.APIConnectionError`；重构 `memory.py` 消除全局状态逃逸；原生 `SystemMessage` 注入兼容旧版 `langgraph`；修复 `obv` 等指标别名映射。
+- **CLI 深度优化**：显式模块导入、流式 chunk 增量 merge（零内存冗余）、代理状态机修复。
 
 ---
 
 ## 更新日志 (News)
-- [2026-05] **v2.0** 发布：里程碑进度条 + 实时 JS 计时器、纯客户端竖向代理 Tab（流式期间可交互，不重启脚本）、历史分析点击跳转分析中心、配置页单行布局、分析师改为 Checkbox。CLI 全面重构：显式导入、流式增量 merge、代理状态机修复。
-- [2026-05] **v1.9** 上线：四 Tab 布局（分析中心 / 历史分析 / 配置 / 诊断）、代理状态显示在 Tab 标签（⚪/⏳/✅）、SQLite 历史索引、A/B 对比、PDF 一键导出、小米 MiMo v2.5 Pro 支持、实时 Token 累计统计。
-- [2026-04] DeepSeek 升级至 **V4 Flash / V4 Pro**（快速/深度引擎均可选 Pro）。
-- [2026-04] A 股数据栈本土化：akshare 千股千评 + 雪球（OpenCLI） + 新浪财经 + 东方财富公告 + 财联社。
-- [2026-03] **TradingAgents SpaceRexxx Fork** 现已深度整合**无缝原生并行执行引擎**以及**火山引擎 (Volcengine) / NVIDIA DeepSeekV3 / OpenAI API** 支持！
-- [2026-03] 上游原版 **TradingAgents v0.2.1** 发布，已覆盖 GPT-5.4、Gemini 3.1 和 Claude 4.6 模型。
+
+- [2026-05] **v2.0 架构升级**：Streamlit 退役并删除，迁移为 FastAPI 后端 + React SPA；新增 `./dev.sh` 一键同启前后端、可配置下载目录、历史「重建索引」、按需 PDF、单次/累计 Token 成本透明度。
+- [2026-05] **v1.9**：四 Tab 布局（分析中心 / 历史分析 / 配置 / 诊断）、SQLite 历史索引、A/B 对比、PDF 导出、小米 MiMo v2.5 Pro、实时 Token 累计统计。
+- [2026-04] DeepSeek 升级至 **V4 Flash / V4 Pro**；A 股数据栈本土化（akshare + 雪球 + 新浪 + 东方财富 + 财联社）。
+- [2026-03] 整合无缝原生并行执行引擎及火山引擎 / NVIDIA DeepSeek V3 / OpenAI 支持；上游 **TradingAgents v0.2.1** 覆盖 GPT-5.4、Gemini 3.1、Claude 4.6。
 
 <div align="center">
 
-🚀 [系统架构](#tradingagents-系统架构) | ⚡ [安装与 Web UI 使用](#安装指南-installation) | 🎬 [演示视频](https://www.youtube.com/watch?v=90gr5lwjIho) | 🤝 [贡献指南](#参与贡献) | 📄 [引用](#引用)
+🚀 [系统架构](#tradingagents-系统架构) | 🧱 [技术架构](#-技术架构-v20) | ⚡ [安装](#安装指南-installation) | ▶️ [运行](#-运行项目-running-the-project) | 🤝 [贡献](#参与贡献) | 📄 [引用](#引用)
 
 </div>
 
 ## TradingAgents 系统架构
 
-TradingAgents 是一个完全模拟现实世界顶级量化交易公司运作动态的多智能体（Multi-Agent）框架。通过部署由大语言模型（LLM）驱动的各种专业化智能体（从基本面分析师、情绪专家、技术分析师，到交易员、风险管理团队），平台可以协同评估复杂的市场状况并做出专业的交易决策。更重要的是，这些智能体会在系统内进行动态辩论（Debates），以共同寻找最优的交易策略。
+TradingAgents 是一个模拟现实世界顶级量化交易公司运作动态的多智能体（Multi-Agent）框架。由大语言模型驱动的专业化智能体（基本面分析师、情绪专家、技术分析师、交易员、风险管理团队）协同评估市场并通过动态辩论（Debates）寻找最优策略。
 
 <p align="center">
   <img src="assets/schema.png" style="width: 100%; height: auto;">
 </p>
 
-> TradingAgents 框架专为学术研究与实验而设计。实际的交易表现可能会因为多种因素而有很大差异，包括您选择的底层大语言模型能力、模型温度设定、交易周期、数据质量以及其他非确定性因素。[本框架不作为任何财务、投资或交易建议。](https://tauric.ai/disclaimer/)
-
-我们的框架将复杂的交易任务分解为多个专业化的角色。这种分治策略确保了系统在面对庞杂的市场分析和决策时，依然能够保持强大和可扩展性。
+> 本框架专为学术研究与实验设计。实际交易表现受底层模型能力、温度设定、交易周期、数据质量等非确定性因素影响。[本框架不作为任何财务、投资或交易建议。](https://tauric.ai/disclaimer/)
 
 ### 分析师团队 (Analyst Team)
-- **基本面分析师**：评估公司的财务报表和关键业绩指标，识别公司的内在价值与潜在危险信号。
-- **社交情绪分析师**：利用情感打分算法分析社交媒体与公众情绪，感知短期的市场氛围。
-- **新闻分析师**：密切跟踪全球新闻和宏观经济指标，解读大事件对市场现状的潜在影响。
-- **技术分析师**：运用各类技术指标（如 MACD、RSI、OBV 等）检测交易走势，预测价格动向。
+- **基本面分析师**：评估财务报表与关键业绩指标，识别内在价值与危险信号。
+- **社交情绪分析师**：分析社交媒体与公众情绪，感知短期市场氛围。
+- **新闻分析师**：跟踪全球新闻与宏观指标，解读大事件对市场的影响。
+- **技术分析师**：运用 MACD、RSI、OBV 等指标检测走势，预测价格动向。
 
 <p align="center">
   <img src="assets/analyst.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
 ### 研究员团队 (Researcher Team)
-- 由“多头（看涨）”和“空头（看跌）”两位研究员组成，他们会对分析师团队提供的报告进行极其挑剔的审视。通过结构化的激烈辩论，他们将在潜在收益与固有风险之间进行权衡。
+- 由“多头（看涨）”与“空头（看跌）”研究员组成，对分析师报告进行挑剔审视，通过结构化辩论权衡收益与风险。
 
 <p align="center">
   <img src="assets/researcher.png" width="70%" style="display: inline-block; margin: 0 2%;">
 </p>
 
 ### 交易员 (Trader Agent)
-- 汇总分析师和研究员的全部报告与辩论记录，生成明智的交易计划提案。交易员负责确定交易的切入点、止损点、持仓规模等战略部署。
+- 汇总分析师与研究员的报告及辩论记录，生成交易计划提案（切入点、止损点、持仓规模）。
 
 <p align="center">
   <img src="assets/trader.png" width="70%" style="display: inline-block; margin: 0 2%;">
 </p>
 
 ### 风险管理团队与投资组合经理 (Risk Management & Portfolio Manager)
-- 风险管理团队（通常由激进型、保守型、中立型风控制定者组成）持续评估投资组合层面的风险，审查交易团队提交的策略，并将包含风险预警的最终评估报告上交。
-- **投资组合经理（Portfolio Manager）** 作为最后一道防线，负责批准或驳回交易员提出的交易提案。如果提案获批，指令将被发送至模拟交易所被正式执行。
+- 风险管理团队（激进 / 保守 / 中立型）持续评估组合层面风险，审查交易策略并上交含风险预警的最终评估。
+- **投资组合经理**作为最后一道防线，批准或驳回交易提案。
 
 <p align="center">
   <img src="assets/risk.png" width="70%" style="display: inline-block; margin: 0 2%;">
 </p>
 
+## 🧱 技术架构 (v2.0)
+
+```
+┌──────────────────────────┐        HTTP /api  +  WS /ws        ┌───────────────────────────┐
+│  前端  frontend/ (React)  │ ──────────────────────────────────▶ │  后端  backend/ (FastAPI)   │
+│  Vite · TS · Zustand     │ ◀────── 流式 chunk / 终态事件 ────── │  封装 tradingagents 引擎     │
+│  :5173 (开发，代理到 :8765) │                                     │  :8765  REST + WebSocket    │
+└──────────────────────────┘                                     │  SQLite 历史索引 / 持久化    │
+                                                                  │  按需 PDF (Playwright)      │
+        cli/ (Rich/Typer，独立运行，复用同一引擎与结果目录) ───────▶ └───────────────────────────┘
+```
+
+- **后端** `backend/`：FastAPI 应用（`backend.main:app`）。`POST /api/analysis/start` 启动分析，`WS /api/analysis/ws/{run_id}` 流式推送逐节点 chunk 与终态事件；历史、对比、诊断、Provider、配置、报价、统计、按需 PDF 等 REST 端点。引擎结果写入 `results_dir` 并建 SQLite 索引。
+- **前端** `frontend/`：React + TypeScript SPA，四个路由 Tab：**分析中心 / 历史分析 / 配置 / 诊断**。`useAnalysisStream` 钩子管理 WebSocket 生命周期；客户端从 chunk 推导各 Agent/阶段状态与进度。
+- **CLI** `cli/`：纯终端入口，复用同一引擎与结果目录，未受架构迁移影响。
+- 结果与索引默认在 `~/Desktop/Stock`，可在 **配置** Tab 改「下载目录」或用环境变量 `TRADINGAGENTS_RESULTS_DIR`。
+- 详细文档见 `docs/backend.md`、`docs/frontend.md`。
+
 ## 安装指南 (Installation)
 
-本项目强依赖 Python 3.10 及以上环境，并由于集成了全新的 PDF 导出功能，您还需要安装 Playwright 浏览器内核。
+依赖 **Python 3.10+**、**Node.js 18+**（前端构建/开发）、以及 **Playwright Chromium 内核**（PDF 渲染）。
 
-### 🍎 macOS (Apple Silicon M1/M2/M3/M4/M5 或 Intel)
-1. **安装环境管理工具 (Miniconda / Anaconda)**（如已安装可跳过）:
-   ```bash
-   brew install --cask miniconda
-   ```
-2. **下载并进入项目**:
-   ```bash
-   git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents-WebUI
-   ```
-3. **创建虚拟环境并激活**:
-   ```bash
-   conda create -n tradingagents python=3.11 -y
-   conda activate tradingagents
-   ```
-4. **安装 Python 依赖库与浏览器内核**:
-   ```bash
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
+### 🍎 macOS (Apple Silicon / Intel)
+```bash
+# 1. 环境管理工具（如已安装可跳过）
+brew install --cask miniconda
+brew install node            # Node.js 18+（前端需要）
 
-### 🪟 Windows (推荐使用 PowerShell/CMD)
-1. **安装 Anaconda 或 Miniconda**:
-   请前往 [Miniconda 官网](https://docs.conda.io/en/latest/miniconda.html) 下载 Windows 安装包并安装。
-2. **在终端中下载并进入项目**:
-   ```powershell
-   git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-   cd TradingAgents-WebUI
-   ```
-3. **创建虚拟环境并激活**:
-   ```powershell
-   conda create -n tradingagents python=3.11 -y
-   conda activate tradingagents
-   ```
-4. **安装依赖与浏览器内核**:
-   ```powershell
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
+# 2. 获取项目
+git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
+cd TradingAgents-WebUI
+
+# 3. Python 环境
+conda create -n tradingagents python=3.11 -y
+conda activate tradingagents
+
+# 4. 依赖 + 浏览器内核
+pip install -r requirements.txt
+playwright install chromium
+
+# 5. 前端依赖（也可由 ./dev.sh 首次运行时自动安装）
+cd frontend && npm install && cd ..
+```
+
+### 🪟 Windows (PowerShell / CMD)
+```powershell
+# 1. 安装 Miniconda 与 Node.js 18+（https://nodejs.org）
+git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
+cd TradingAgents-WebUI
+
+# 2. Python 环境
+conda create -n tradingagents python=3.11 -y
+conda activate tradingagents
+
+# 3. 依赖 + 内核 + 前端
+pip install -r requirements.txt
+playwright install chromium
+cd frontend; npm install; cd ..
+```
 
 ### 🐧 Linux (Ubuntu / Debian)
 ```bash
-# 1. 下载项目
 git clone https://github.com/SpaceRexxx/TradingAgents-WebUI.git
-cd TradingAgents
+cd TradingAgents-WebUI
 
-# 2. 安装 Python3.11 及 venv (若不使用 conda)
 sudo apt update
-sudo apt install python3.11 python3.11-venv python3-pip -y
+sudo apt install python3.11 python3.11-venv python3-pip nodejs npm -y
 python3.11 -m venv venv
 source venv/bin/activate
 
-# 3. 安装依赖文件与对应的浏览器内核所需的系统包
 pip install -r requirements.txt
 playwright install chromium
 playwright install-deps
+cd frontend && npm install && cd ..
 
-# ⚠️ 部署小提示 (Linux 专用)
-# 如果您在无界面的 Linux 服务器上发现导出的 PDF 中文显示为方块，请安装中文字体：
+# ⚠️ 无界面服务器若 PDF 中文显示为方块，安装中文字体：
 # sudo apt install fonts-noto-cjk -y
 ```
 
-### 🌐 可选依赖：OpenCLI（A 股 / 社交舆情数据桥接）
+### 🌐 可选依赖：OpenCLI（A 股 / 社交舆情 / 实时报价桥接）
 
-部分数据源（**雪球讨论流、新浪财经宏观、东方财富、Reddit**）通过 [OpenCLI](https://www.npmjs.com/package/@jackwener/opencli) 调用你本地登录态的浏览器抓取，可绕过 WAF 与登录墙。如果你**只分析美股**且不需要 Reddit 舆情，可以跳过此步骤；如果你要分析 **A 股**，强烈建议安装。
+雪球讨论流、新浪财经宏观、东方财富、Reddit，以及分析中心顶部的**实时价格 + 中文名**均通过 [OpenCLI](https://www.npmjs.com/package/@jackwener/opencli) 调用你本地登录态的浏览器抓取。只分析美股且不需要 Reddit 舆情可跳过；分析 **A 股**强烈建议安装。
 
 ```bash
-# 1. 安装 Node.js（如已安装可跳过）
-#    macOS:  brew install node
-#    其它系统请参考 https://nodejs.org
-
-# 2. 全局安装 OpenCLI
+# macOS: brew install node ；其它系统见 https://nodejs.org
 npm install -g @jackwener/opencli
-
-# 3. 首次使用前打开对应平台并登录（仅需一次）
-opencli xueqiu login         # 雪球
-opencli reddit login         # Reddit（美股社交情绪用）
+opencli xueqiu login         # 雪球（实时报价 + A 股舆情）
+opencli reddit login         # Reddit（美股社交情绪）
 ```
 
 ### 🛠️ 常见安装问题 (Troubleshooting)
 
-如果您在安装过程中遇到以下报错，请参考对应解决方法：
-
-#### 1. Conda 协议未接受 (CondaToSNonInteractiveError)
-**报错现象**：提示 `Terms of Service have not been accepted`。
-**解决方法**：在终端运行以下两条命令以接受服务条款：
+**1. Conda 协议未接受 (CondaToSNonInteractiveError)**
 ```bash
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
 conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 ```
 
-#### 2. 环境激活报错 (CondaError: Run 'conda init')
-**报错现象**：运行 `conda activate` 时提示需要先运行 `conda init`。
-**解决方法**：
-1. 运行初始化命令：`conda init zsh` (MacOS/Linux) 或 `conda init powershell` (Windows)。
-2. **务必关闭当前的终端窗口，重新打开一个新的窗口**后再尝试运行 `conda activate tradingagents`。
-3. 如果依然失败，可以尝试在当前窗口运行：`source ~/.zshrc` (MacOS) 以强制刷新配置。
+**2. 环境激活报错 (CondaError: Run 'conda init')**
+运行 `conda init zsh`(macOS/Linux) 或 `conda init powershell`(Windows)，**关闭并重开终端**后再 `conda activate tradingagents`；仍失败可 `source ~/.zshrc`。
 
-#### 3. 分析成功但 PDF 未生成 / 找不到 Executable
-**报错现象**：页面顶部显示“✅ 分析完成”，但**没有出现下载按钮**。如果您滚动到页面最底部，可能会看到发红的报错信息提示：`Executable doesn't exist at /.../headless_shell`。
-**原因与解决方法**：这是因为由于您所处的运行环境只有 Python 包，却没有下载实际的**浏览器内核可执行文件**。
-请务必在您的目标虚拟环境中（确保已经执行过 `conda activate tradingagents`），单独跑一次这个系统级写入命令：
+**3. 点击下载 PDF 报错 / 找不到 Executable**
+报错 `Executable doesn't exist at /.../headless_shell` 说明只装了 Python 包没装浏览器内核。在已激活的环境中执行：
 ```bash
 playwright install chromium
 ```
-*提示：如果您的环境存在别名或路径隔离，也可以尝试指定绝对路径，例如：`/您的conda环境路径/bin/playwright install chromium`。*
+
+**4. 历史列表缺少最近分析 / 下载 PDF 报「No indexed analysis」**
+说明该次分析的报告未入 SQLite 索引（多为旧版本遗留）。在**历史分析**页点击 **「重建索引」**，会从引擎日志补全报告并重建索引。
 
 ### 🔄 如何更新 (How to Update)
-如果您已经安装过旧版本，请运行以下命令一键更新到最新版 (v2.0)：
 ```bash
 git fetch --all
-git reset --hard origin/main  # 注意：这会丢弃您本地对代码的修改
+git reset --hard origin/main      # 注意：丢弃本地代码改动
 conda activate tradingagents
 pip install -r requirements.txt
 playwright install chromium
+cd frontend && npm install && cd ..
 ```
 
 ### 必需的 API (Required APIs)
 
-本深度优化版本（SpaceRexxx 版）通过 Web UI 可以直接在前端注入 API Key（会自动留存浏览器缓存），但您依然可以选择通过配置 `.env` 文件或全局变量来让后端自动读取默认的 API Key：
+可在 Web UI **配置** Tab 直接注入 API Key（写入 `.env` + 进程环境），也可预先配置环境变量：
 
 ```bash
-export OPENAI_API_KEY=...          # OpenAI (GPT系列)
-export ANTHROPIC_API_KEY=...       # Anthropic (Claude系列)
-export GOOGLE_API_KEY=...          # Google (Gemini系列)
+export OPENAI_API_KEY=...          # OpenAI (GPT 系列)
+export ANTHROPIC_API_KEY=...       # Anthropic (Claude 系列)
+export GOOGLE_API_KEY=...          # Google (Gemini 系列)
 export DEEPSEEK_API_KEY=...        # DeepSeek V4 Flash / V4 Pro
-export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3等，格式通常为 nvapi- 开头)
+export NVIDIA_API_KEY=...          # NVIDIA NIM (DeepSeek V3 等，nvapi- 开头)
 export ARK_API_KEY=...             # 火山引擎 (Volcengine)
 export MIMO_API_KEY=...            # 小米 MiMo v2.5 Pro
 export DASHSCOPE_API_KEY=...       # Qwen 国际版
@@ -219,80 +215,186 @@ export ZHIPU_CN_API_KEY=...        # GLM (BigModel 国内版)
 export MINIMAX_API_KEY=...         # MiniMax 全球版
 export MINIMAX_CN_API_KEY=...      # MiniMax 国内版
 export OPENROUTER_API_KEY=...      # OpenRouter (多模型聚合)
-export XAI_API_KEY=...             # xAI (Grok系列)
+export XAI_API_KEY=...             # xAI (Grok 系列)
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage 数据源
 ```
 
 > [!IMPORTANT]
-> **WebUI 秘钥持久化**：
-> 您可以在 WebUI **配置** Tab 直接输入 Key 并点击 **”保存到 .env”**。
-    - **本地环境**：强烈推荐，可避免重复输入。
-    - **公网/云端环境**：**请勿点击保存**，否则您的 Key 将会被持久化记录在服务器磁盘上，存在泄露风险。
+> **WebUI 密钥持久化**：在 **配置** Tab 输入 Key 会写入 `.env` + 进程环境（永不回显）。
+> - **本地环境**：推荐，避免重复输入。
+> - **公网/云端环境**：**请谨慎保存**，Key 会落盘到服务器，存在泄露风险。
 
-> **💡 模型填写小贴士**：
-> 如果您在使用**火山引擎 (Volcengine)**，在左侧边栏填写模型名称时，必须填写您在火山引擎控制台创建的 **Endpoint ID** (比如 `ep-2026xxxx-xxxx`)，而不是单纯的 "DeepSeek-V3"。
+> **💡 模型填写提示**：使用**火山引擎 (Volcengine)** 时，模型名须填火山控制台创建的 **Endpoint ID**（如 `ep-2026xxxx-xxxx`），而非 "DeepSeek-V3"。
 
-推荐的方法是：将源码目录中的 `.env.example` 复制一份并重命名为 `.env`，然后在其中填入您的密钥：
+推荐复制 `.env.example` 为 `.env` 并填入密钥：
 ```bash
 cp .env.example .env
 ```
 
-
 ## 🚀 运行项目 (Running the Project)
 
-在运行前，请确保您已经完成了虚拟环境的激活 (`conda activate tradingagents`)。
+确保已激活虚拟环境 (`conda activate tradingagents`)。本项目支持两种互补方式。
 
-本优化版支持两种互补的运行方式：
+### 1. Web UI（推荐）
 
-### 1. 启动 Web UI 可视化控制台 (推荐)
-
-这是最直观的使用方式，配置 Tab 支持注入 API Key、实时里程碑进度条 + JS 倒计时、竖向代理 Tab 流式展示报告、历史分析一键跳转、PDF 一键导出：
+v2.0 为 **React SPA + FastAPI 后端（两个进程）**。一条命令同时启动、保留热重载、`Ctrl+C` 一并退出：
 
 ```bash
-streamlit run webapp.py
+./dev.sh
 ```
+
+首次运行会自动 `npm install`。启动后打开 **http://localhost:5173**（前端，`/api` 与 `/ws` 自动代理到后端 :8765）；后端 OpenAPI 文档在 **http://localhost:8765/docs**。可用环境变量 `BACKEND_PORT` 覆盖后端端口。
+
+需要分别启动（调试单侧）时：
+
+```bash
+# 终端 1（后端，项目根目录）
+uvicorn backend.main:app --port 8765
+# 终端 2（前端）
+cd frontend && npm install && npm run dev
+```
+
+四个 Tab：
+
+- **分析中心**：填股票代码（失焦显示实时价 + 中文名）、日期、持仓开关、分析师 Checkbox、研究深度、价格/新闻回溯滑块 → 开始分析。里程碑进度条 + 实时计时器、左侧 12 个 Agent 状态侧栏（点击预览流式内容）、完成后「本次分析透明度」卡片（输入/输出/总 Token、估算成本、工具调用、数据新鲜度）。
+- **历史分析**：顶部「累计统计（所有分析）」卡片；列表支持按 ticker 过滤、备注/评分、A/B 分节 diff、按行下载 PDF、**重建索引**。
+- **配置**：注入各 Provider API Key、测试连通性、设置**下载目录**。
+- **诊断**：数据源健康探测。
 
 <p align="center">
   <img src="assets/webui_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
-> 🎉 **自动 PDF 研报**：分析完成后，Web 页面会自动调起集成的 `Playwright` 引擎，将 Markdown 报表全自动转录渲染为 **PDF 研报**，点击按钮即可下载。
+> 🎉 **PDF 研报（按需生成）**：分析完成后点击「下载本次 PDF」，后端调起 `Playwright` 将 Markdown 报表实时渲染为 **PDF** 返回（不落盘）。历史页同样支持按行下载；某次未入索引时点「重建索引」恢复。
 
-### 2. 启动极速 CLI 文本端
+### 2. CLI 文本端
 
-在纯终端环境下工作，CLI 提供完全并行的分析引擎和精美的 Rich 控制台渲染：
+纯终端环境下，CLI 提供完全并行的分析引擎与 Rich 控制台渲染：
 
 ```bash
 python -m cli.main
 ```
 
-**CLI 核心特性：**
-- **⚡ 并发分析启动**：所有选中的分析师团队真正并行运行，实时进度追踪。
-- **🛰️ 供应商全兼容**：支持 DeepSeek、OpenAI、Anthropic、Google、Qwen、GLM、MiniMax、OpenRouter、xAI、火山引擎、NVIDIA、Azure、Ollama 共 13 家供应商。
-- **🔐 动态 Key 注入**：启动时智能检测 Key 状态，缺失时交互式填入并持久化到 `.env`。
-- **📄 报告自动保存**：分析结束后自动将各阶段报告保存至 `results/<ticker>/<date>/` 结构化目录。
+- **⚡ 并发分析**：选中的分析师团队真正并行运行，实时进度追踪。
+- **🛰️ 供应商全兼容**：DeepSeek、OpenAI、Anthropic、Google、Qwen、GLM、MiniMax、OpenRouter、xAI、火山引擎、NVIDIA、Azure、Ollama。
+- **🔐 动态 Key 注入**：启动时检测 Key 状态，缺失时交互式填入并持久化到 `.env`。
+- **📄 报告自动保存**：分析结束后保存各阶段报告至 `<results_dir>/<ticker>/<date>/`。
 
 <p align="center">
   <img src="assets/cli_demo.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
+### 🐳 Docker
+
+`docker-compose.yml` 已迁移为后端 + 可选前端服务：
+
+```bash
+docker compose up webapp            # 仅后端 (uvicorn :8765)
+docker compose up webapp frontend   # 后端 + 前端 dev (:5173)
+```
+
+---
+
+## 🤖 给 AI Agent 的说明 (Machine-Readable Quickstart)
+
+> 本节面向自动化智能体。命令均为非交互、幂等，可直接执行。`$REPO` = 仓库根目录绝对路径。
+
+### 1. 前置检查
+- 需要 `python3` (≥3.10)、`node` (≥18)、`npm`、`git`。缺失则先安装；不要用交互式安装器。
+- PDF 渲染需要 Playwright Chromium（见步骤 2）。A 股实时报价/舆情可选 `npm i -g @jackwener/opencli`（缺失时报价端点返回 204，不阻断分析）。
+
+### 2. 安装（非交互）
+```bash
+cd "$REPO"
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+( cd frontend && npm ci || npm install )
+```
+
+### 3. 配置 API Key（二选一）
+- 写 `.env`（根目录）：每行 `PROVIDER_ENV=key`，例如 `DEEPSEEK_API_KEY=sk-...`（变量名见上文「必需的 API」）。
+- 或通过端点：`POST /api/providers/{id}/key`，body `{"api_key":"..."}`（写入 `.env`+进程环境，永不回显）。
+
+### 4. 启动后端（编程驱动用纯后端，无需前端）
+```bash
+. .venv/bin/activate
+nohup python -m uvicorn backend.main:app --port 8765 > /tmp/ta_backend.log 2>&1 &
+# 就绪探测（最多等 ~30s）
+until curl -fs http://localhost:8765/api/health | grep -q '"status":"ok"'; do sleep 1; done
+```
+（带界面则改用 `./dev.sh`，前端在 http://localhost:5173 ，API 代理到 :8765。）
+
+### 5. 跑一次分析并取结果（纯 REST，无需 WebSocket）
+```bash
+# 5a. 启动；返回 {"run_id":"..."}
+curl -s -XPOST http://localhost:8765/api/analysis/start \
+  -H 'Content-Type: application/json' -d '{
+    "ticker":"AAPL",
+    "trade_date":"2026-05-17",
+    "config_overrides":{
+      "selected_analysts":["market","social","news","fundamentals"],
+      "max_debate_rounds":1,"max_risk_discuss_rounds":1,
+      "lookback_days":30,"news_lookback_days":7,
+      "has_position":"未持有"
+    }
+  }'
+
+# 5b. 完成信号 = 该 (ticker, trade_date) 出现在历史索引（成功才入库）。轮询：
+until curl -s 'http://localhost:8765/api/history?ticker=AAPL' \
+  | grep -q '"trade_date": *"2026-05-17"'; do sleep 5; done
+
+# 5c. 取结构化报告 JSON（含各 Agent 报告、final_trade_decision、token_stats）
+cat "$RESULTS_DIR/AAPL/2026-05-17/final_state_report.json"
+# 5d. 取 PDF
+curl -s -o report.pdf 'http://localhost:8765/api/runs/AAPL/2026-05-17/pdf'
+```
+- 实时进度（可选）：`WS /api/analysis/ws/{run_id}`，事件 `status|chunk|done|aborted|error|ping`；`done` 事件带 `token_stats`。中止：`POST /api/analysis/{run_id}/abort`。
+- `$RESULTS_DIR` 默认 `~/Desktop/Stock`，可用环境变量 `TRADINGAGENTS_RESULTS_DIR` 指定，或 `PUT /api/settings` body `{"results_dir":"/abs/path"}`（对新分析生效）。
+
+### 6. 关键端点速查
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/api/health` | 就绪探测 `{"status":"ok"}` |
+| POST | `/api/analysis/start` | 启动分析 → `{run_id}` |
+| WS | `/api/analysis/ws/{run_id}` | 流式 `status/chunk/done/aborted/error/ping` |
+| POST | `/api/analysis/{run_id}/abort` | 中止 |
+| GET | `/api/history?ticker=` | 历史索引（完成信号） |
+| POST | `/api/history/reindex` | 从引擎日志补建缺失索引 |
+| GET | `/api/runs/{ticker}/{trade_date}/pdf` | 按需 PDF |
+| GET | `/api/stats/cumulative` | 累计 Token/成本统计 |
+| GET/PUT | `/api/settings` | 读/改下载目录 |
+| GET/POST | `/api/providers` · `/api/providers/{id}/key` | Provider 列表 / 写 Key |
+| GET | `/api/diagnostics` | 数据源健康 |
+| GET | `/api/quote/{ticker}` | 实时报价（无 opencli 时 204） |
+
+完整交互式文档：运行后访问 `http://localhost:8765/docs`（OpenAPI）。后端细节见 `docs/backend.md`。
+
+### 7. 自检（可选）
+```bash
+. .venv/bin/activate && python -m pytest tests/backend -q
+( cd frontend && npm test )
+```
+
+### 8. CLI 替代（无 HTTP，单进程）
+`python -m cli.main` —— 交互式，不适合全自动驱动；自动化优先用上面的 REST 方式。
+
 ---
 
 ## ⚖️ License & Acknowledgements (版权与致谢)
 
-本项目的原始框架灵感与基础架构均来源于出色的开源研究工作 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)，向原作者致以最诚挚的感谢。
-
-本项目沿用原始的 [Apache License 2.0](./LICENSE) 协议进行开源分发。
+原始框架灵感与基础架构来源于 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)，向原作者致以诚挚感谢。本项目沿用 [Apache License 2.0](./LICENSE)。
 - Original Work: Copyright 2024-2025 TauricResearch
 - Modifications: Copyright 2026 SpaceRexxx
 
 ## 参与贡献
 
-我们非常欢迎来自社区的各类贡献！不论是修复 Bug、改进说明文档、还是提议一项酷炫的新功能开发，您的积极参与都将让本框架变得愈发强大。
+欢迎社区贡献！修复 Bug、改进文档、提议新功能均欢迎。后端测试 `pytest tests/backend -v`，前端测试 `cd frontend && npm test`。
 
 ## 引用
 
-如果 *TradingAgents* 的框架理念为您的量化研究或者学术开发带来了帮助，请引用原作者的论文：
+如果 *TradingAgents* 的框架理念对您的研究有帮助，请引用原作者论文：
 
 ```
 @misc{xiao2025tradingagentsmultiagentsllmfinancial,

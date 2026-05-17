@@ -31,8 +31,12 @@ feedparser
 parsel
 requests
 
-# --- Web App & CLI ---
-streamlit
+# --- Web App: FastAPI backend (v2.0; React SPA lives in frontend/) ---
+fastapi
+uvicorn[standard]
+pydantic-settings
+
+# --- CLI & shared ---
 playwright
 markdown2
 rich
