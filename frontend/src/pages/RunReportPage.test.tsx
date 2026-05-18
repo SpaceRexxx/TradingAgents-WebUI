@@ -93,6 +93,7 @@ it("renders structured decision table and compliance footer", async () => {
     ),
   );
   expect(await screen.findByText("建仓 250-255")).toBeInTheDocument();
+  expect(screen.getByText("Buy")).toBeInTheDocument();
   expect(screen.getByText("8/10")).toBeInTheDocument();
   expect(screen.getByText(/不构成任何投资建议/)).toBeInTheDocument();
   expect(screen.getByText(/deepseek-v4-pro/)).toBeInTheDocument();

@@ -85,6 +85,16 @@ function buildGroups(finalState: Record<string, unknown>): RenderedReportGroup[]
   })).filter((group) => group.sections.length > 0);
 }
 
+function asDecision(value: unknown): PortfolioDecision | null {
+  const o = record(value);
+  return typeof o.rating === "string" ? (o as unknown as PortfolioDecision) : null;
+}
+
+function asRunMeta(value: unknown): RunMeta | null {
+  const o = record(value);
+  return typeof o.disclaimer === "string" ? (o as unknown as RunMeta) : null;
+}
+
 const DECISION_ROWS: [keyof PortfolioDecision, string][] = [
   ["rating", "评级"],
   ["conviction_score", "信心度"],
@@ -175,8 +185,8 @@ export default function RunReportPage() {
     [finalState],
   );
 
-  const decision = (finalState?.portfolio_decision ?? null) as PortfolioDecision | null;
-  const runMeta = (finalState?.run_meta ?? null) as RunMeta | null;
+  const decision = asDecision(finalState?.portfolio_decision);
+  const runMeta = asRunMeta(finalState?.run_meta);
   const fallbackDecision =
     !decision && finalState && typeof finalState.final_trade_decision === "string"
       ? (finalState.final_trade_decision as string)
