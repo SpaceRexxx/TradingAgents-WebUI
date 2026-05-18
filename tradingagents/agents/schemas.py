@@ -185,6 +185,8 @@ class PortfolioDecision(BaseModel):
     )
     conviction_score: Optional[int] = Field(
         default=None,
+        ge=1,
+        le=10,
         description=(
             "Conviction in this rating on a 1-10 integer scale (1 = very low "
             "conviction, 10 = very high). Base it on how decisively the "

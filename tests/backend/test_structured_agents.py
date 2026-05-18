@@ -33,3 +33,16 @@ def test_render_pm_decision_includes_conviction_when_present():
         )
     )
     assert "**Conviction**: 7/10" in md_with
+
+
+def test_conviction_score_rejects_out_of_range():
+    import pytest
+    from pydantic import ValidationError
+    from tradingagents.agents.schemas import PortfolioDecision
+
+    for bad in (0, 11, -5):
+        with pytest.raises(ValidationError):
+            PortfolioDecision(
+                rating="Buy", executive_summary="s", investment_thesis="t",
+                conviction_score=bad,
+            )
