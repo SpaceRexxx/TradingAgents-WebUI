@@ -50,6 +50,7 @@ def get_methodology(key: str) -> str:
     reviewed independently. Missing/unreadable file returns "" so a
     deployment without the file degrades gracefully instead of crashing.
     Result is cached: files are read once per process.
+    Missing files are also cached, so adding a methodology file mid-process requires a restart or get_methodology.cache_clear().
     """
     path = _METHODOLOGY_DIR / f"{key}.md"
     try:

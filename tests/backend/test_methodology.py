@@ -15,5 +15,5 @@ def test_get_methodology_missing_key_returns_empty_string():
 def test_get_methodology_is_cached_same_object():
     a = get_methodology("fundamentals")
     b = get_methodology("fundamentals")
-    assert a == b
+    assert a is b
     assert a != ""
