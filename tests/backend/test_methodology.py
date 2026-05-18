@@ -47,3 +47,18 @@ def test_phase_a_methodology_keys_present_and_nonempty():
         assert text != "", f"missing methodology: {key}"
         assert "引用即纪律" in text, f"cite-or-flag rule missing in: {key}"
         assert "【自检】" in text, f"self-check block missing in: {key}"
+
+
+def test_phase_a_decision_agent_modules_import():
+    import importlib
+    for mod in (
+        "tradingagents.agents.researchers.bull_researcher",
+        "tradingagents.agents.researchers.bear_researcher",
+        "tradingagents.agents.risk_mgmt.aggressive_debator",
+        "tradingagents.agents.risk_mgmt.conservative_debator",
+        "tradingagents.agents.risk_mgmt.neutral_debator",
+        "tradingagents.agents.managers.research_manager",
+        "tradingagents.agents.managers.portfolio_manager",
+        "tradingagents.agents.trader.trader",
+    ):
+        importlib.import_module(mod)
