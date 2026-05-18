@@ -1,4 +1,9 @@
+from functools import lru_cache
+from pathlib import Path
+
 from langchain_core.messages import HumanMessage, RemoveMessage
+
+_METHODOLOGY_DIR = Path(__file__).resolve().parents[2] / "methodology"
 
 # Import tools from separate utility files
 from tradingagents.agents.utils.core_stock_tools import (
@@ -34,6 +39,23 @@ def get_language_instruction() -> str:
     if lang.strip().lower() == "english":
         return ""
     return f" Write your entire response in {lang}."
+
+
+@lru_cache(maxsize=None)
+def get_methodology(key: str) -> str:
+    """Return the analyst methodology markdown for ``key`` (e.g. 'market').
+
+    Methodology lives in ``tradingagents/methodology/<key>.md`` as a single
+    source of truth, kept out of the prompt code so it can be iterated and
+    reviewed independently. Missing/unreadable file returns "" so a
+    deployment without the file degrades gracefully instead of crashing.
+    Result is cached: files are read once per process.
+    """
+    path = _METHODOLOGY_DIR / f"{key}.md"
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return ""
 
 
 def build_instrument_context(ticker: str) -> str:
