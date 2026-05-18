@@ -58,6 +58,11 @@ def invoke_structured_or_freetext_capture(
     instance when structured output succeeded, or ``None`` when the
     free-text fallback fired (so callers can decide whether to expose the
     structured fields downstream).
+
+    ``prompt`` is whatever the underlying LLM accepts (a string for chat
+    invocations, a list of message dicts for chat models that take that
+    shape). The same value is forwarded to the free-text path so the
+    fallback sees the same input the structured call did.
     """
     if structured_llm is not None:
         try:

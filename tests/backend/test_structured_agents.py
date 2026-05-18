@@ -87,3 +87,32 @@ def test_capture_freetext_fallback_returns_none_object():
     )
     assert md == "free text decision"
     assert parsed is None
+
+
+def test_capture_deepseek_none_falls_back_to_freetext():
+    from tradingagents.agents.schemas import render_pm_decision
+    from tradingagents.agents.utils.structured import (
+        invoke_structured_or_freetext_capture,
+    )
+
+    class FakeNoneStructured:
+        def invoke(self, _prompt):
+            return None  # provider emitted no tool-call (DeepSeek quirk)
+
+    class FakePlain:
+        def invoke(self, _prompt):
+            class R:
+                content = "fallback text"
+            return R()
+
+    md, parsed = invoke_structured_or_freetext_capture(
+        FakeNoneStructured(), FakePlain(), "prompt", render_pm_decision, "PM"
+    )
+    assert md == "fallback text"
+    assert parsed is None
+
+
+def test_agent_state_registers_portfolio_decision_key():
+    from tradingagents.agents.utils.agent_states import AgentState
+
+    assert "portfolio_decision" in AgentState.__annotations__
