@@ -16,6 +16,8 @@ export interface TokenStats {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  cached_input_tokens?: number;
+  uncached_input_tokens?: number;
   cost_usd: number;
   tool_calls: Record<string, number>;
   tool_call_count: number;
@@ -56,7 +58,19 @@ export interface HistoryItem {
 export interface HistoryListResponse { items: HistoryItem[]; }
 export interface PatchHistoryRequest { note?: string; rating?: string; }
 
-export interface DiffSection { changed: boolean; diff: string; }
+export interface RunReportResponse {
+  ticker: string;
+  trade_date: string;
+  final_state: Record<string, unknown>;
+}
+
+export interface DiffSection {
+  title: string;
+  changed: boolean;
+  diff: string;
+  a_text: string;
+  b_text: string;
+}
 export interface DiffResponse {
   a: { ticker: string; trade_date: string };
   b: { ticker: string; trade_date: string };

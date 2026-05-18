@@ -37,6 +37,9 @@ def test_diff_two_known_runs(two_runs):
         body = resp.json()
         ftd = body["sections"]["final_trade_decision"]
         assert ftd["changed"] is True
+        assert ftd["title"] == "最终投资决策"
+        assert ftd["a_text"] == "BUY now"
+        assert ftd["b_text"] == "SELL later"
         assert "BUY now" in ftd["diff"]
         assert "SELL later" in ftd["diff"]
         assert body["sections"]["market_report"]["changed"] is True

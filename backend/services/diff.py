@@ -3,17 +3,23 @@ from __future__ import annotations
 import difflib
 import json
 from pathlib import Path
+from typing import Any
 
 from tradingagents.storage import sqlite_history
 
-_DIFF_KEYS = [
-    "market_report",
-    "news_report",
-    "sentiment_report",
-    "fundamentals_report",
-    "investment_plan",
-    "trader_investment_plan",
-    "final_trade_decision",
+_DIFF_SECTIONS = [
+    ("market_report", "市场分析报告"),
+    ("sentiment_report", "舆情分析报告"),
+    ("news_report", "新闻分析报告"),
+    ("fundamentals_report", "基本面分析报告"),
+    ("investment_debate_state.bull_history", "多头研究员辩论"),
+    ("investment_debate_state.bear_history", "空头研究员辩论"),
+    ("investment_plan", "研究经理总结"),
+    ("trader_investment_plan", "交易员计划"),
+    ("risk_debate_state.aggressive_history", "激进型分析师辩论"),
+    ("risk_debate_state.conservative_history", "保守型分析师辩论"),
+    ("risk_debate_state.neutral_history", "中立型分析师辩论"),
+    ("final_trade_decision", "最终投资决策"),
 ]
 
 
@@ -32,6 +38,15 @@ def _load_final_state(results_dir, ticker: str, trade_date: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _get_section(data: dict[str, Any], path: str) -> str:
+    value: Any = data
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return ""
+        value = value.get(part)
+    return value.strip() if isinstance(value, str) else ""
+
+
 def diff_analyses(
     results_dir,
     ticker_a: str,
@@ -43,9 +58,9 @@ def diff_analyses(
     b = _load_final_state(results_dir, ticker_b, date_b)
 
     sections: dict[str, dict] = {}
-    for key in _DIFF_KEYS:
-        va = (a.get(key) or "").strip()
-        vb = (b.get(key) or "").strip()
+    for key, title in _DIFF_SECTIONS:
+        va = _get_section(a, key)
+        vb = _get_section(b, key)
         changed = va != vb
         diff_text = ""
         if changed:
@@ -58,7 +73,13 @@ def diff_analyses(
                     lineterm="",
                 )
             )
-        sections[key] = {"changed": changed, "diff": diff_text}
+        sections[key] = {
+            "title": title,
+            "changed": changed,
+            "diff": diff_text,
+            "a_text": va,
+            "b_text": vb,
+        }
 
     return {
         "a": {"ticker": ticker_a, "trade_date": date_a},

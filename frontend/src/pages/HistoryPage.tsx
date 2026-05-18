@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import {
-  listHistory, patchHistory, pdfUrl, getDiff, getCumulativeStats, reindexHistory,
+  listHistory, patchHistory, pdfUrl, reportUrl, getDiff, getCumulativeStats, reindexHistory,
 } from "../api/client";
 import type { HistoryItem, DiffResponse, CumulativeStats } from "../api/types";
 import StatCard, { fmtInt, fmtCost } from "../components/StatCard";
 import { useAppStore } from "../store/appStore";
+import Markdown from "../components/Markdown";
 
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -19,6 +20,7 @@ export default function HistoryPage() {
   const [diffResult, setDiffResult] = useState<DiffResponse | null>(null);
   const [cum, setCum] = useState<CumulativeStats | null>(null);
   const pushToast = useAppStore((s) => s.pushToast);
+  const selectedKey = selected ? `${selected.ticker}/${selected.trade_date}` : null;
 
   const load = useCallback((ticker?: string) => {
     setLoading(true);
@@ -114,34 +116,51 @@ export default function HistoryPage() {
       {!loading && !errored && items.length === 0 && (
         <p className="muted">暂无历史分析记录。</p>
       )}
-      <table>
-        <thead><tr><th>Ticker</th><th>日期</th><th>评级</th><th>模型</th><th>时间</th></tr></thead>
-        <tbody>
+      {!loading && !errored && items.length > 0 && (
+        <div className="history-grid">
           {items.map((it) => (
-            <tr key={`${it.ticker}/${it.trade_date}`}>
-              <td>
-                <button className="btn-ghost" onClick={() => open(it)}>{it.ticker} {it.trade_date}</button>
-              </td>
-              <td>{it.trade_date}</td>
-              <td>{it.rating ?? "—"}</td>
-              <td>{it.model ?? "—"}</td>
-              <td>{it.created_at}</td>
-            </tr>
+            <Fragment key={`${it.ticker}/${it.trade_date}`}>
+              <article className="history-card">
+                <a className="history-card-code" href={reportUrl(it.ticker, it.trade_date)}>
+                  {it.ticker}
+                </a>
+                <div className="history-card-row">
+                  <span>日期</span>
+                  <strong>{it.trade_date}</strong>
+                </div>
+                <div className="history-card-row">
+                  <span>评级</span>
+                  <strong>{it.rating ?? "—"}</strong>
+                </div>
+                <div className="history-card-row">
+                  <span>模型</span>
+                  <strong>{it.model ?? "—"}</strong>
+                </div>
+                <button
+                  className="btn-ghost history-card-action"
+                  aria-expanded={selectedKey === `${it.ticker}/${it.trade_date}`}
+                  onClick={() => open(it)}
+                >
+                  备注
+                </button>
+              </article>
+              {selectedKey === `${it.ticker}/${it.trade_date}` && (
+                <div className="card col history-editor">
+                  <h3>{selected?.ticker} · {selected?.trade_date}</h3>
+                  <div style={{ color: "var(--c-text-dim)" }}>{selected?.summary}</div>
+                  <textarea placeholder="备注" value={note} onChange={(e) => setNote(e.target.value)} />
+                  <input placeholder="评分 (good/bad/…)" value={rating} onChange={(e) => setRating(e.target.value)} />
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    <button className="btn" onClick={save}>保存备注</button>
+                    <button className="btn-ghost" onClick={() => setSelected(null)}>取消</button>
+                    <a className="btn-ghost" href={pdfUrl(it.ticker, it.trade_date)}
+                       target="_blank" rel="noreferrer"
+                       style={{ textDecoration: "none", padding: "var(--sp-2) var(--sp-4)" }}>下载 PDF</a>
+                  </div>
+                </div>
+              )}
+            </Fragment>
           ))}
-        </tbody>
-      </table>
-      {selected && (
-        <div className="card col">
-          <h3>{selected.ticker} · {selected.trade_date}</h3>
-          <div style={{ color: "var(--c-text-dim)" }}>{selected.summary}</div>
-          <textarea placeholder="备注" value={note} onChange={(e) => setNote(e.target.value)} />
-          <input placeholder="评分 (good/bad/…)" value={rating} onChange={(e) => setRating(e.target.value)} />
-          <div className="row">
-            <button className="btn" onClick={save}>保存备注</button>
-            <a className="btn-ghost" href={pdfUrl(selected.ticker, selected.trade_date)}
-               target="_blank" rel="noreferrer"
-               style={{ textDecoration: "none", padding: "var(--sp-2) var(--sp-4)" }}>下载 PDF</a>
-          </div>
         </div>
       )}
       <div className="card col">
@@ -184,23 +203,22 @@ export default function HistoryPage() {
             <button className="btn-ghost" onClick={() => setDiffResult(null)}>清除对比</button>
           </div>
           {Object.entries(diffResult.sections).map(([key, sec]) => (
-            <div key={key} className="card col">
+            <section key={key} className="card col">
               <div className="row">
-                <span>{key}</span>
+                <span>{sec.title || key}</span>
                 <span className="tag">{sec.changed ? "变更" : "无变更"}</span>
               </div>
-              {sec.changed && (
-                <pre style={{
-                  fontFamily: "monospace",
-                  whiteSpace: "pre-wrap",
-                  maxHeight: "20rem",
-                  overflow: "auto",
-                  fontSize: "var(--fz-sm)",
-                }}>
-                  {sec.diff}
-                </pre>
-              )}
-            </div>
+              <div className="diff-panels">
+                <article className="diff-panel">
+                  <h4>{diffResult.a.ticker} {diffResult.a.trade_date}</h4>
+                  {sec.a_text ? <Markdown>{sec.a_text}</Markdown> : <p className="muted">无内容</p>}
+                </article>
+                <article className="diff-panel">
+                  <h4>{diffResult.b.ticker} {diffResult.b.trade_date}</h4>
+                  {sec.b_text ? <Markdown>{sec.b_text}</Markdown> : <p className="muted">无内容</p>}
+                </article>
+              </div>
+            </section>
           ))}
         </div>
       )}

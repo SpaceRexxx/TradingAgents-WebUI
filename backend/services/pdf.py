@@ -9,13 +9,22 @@ import markdown2
 _SECTIONS = [
     ("第一阶段：分析师团队报告", [
         ("market_report", "市场分析报告"),
-        ("news_report", "新闻分析报告"),
         ("sentiment_report", "社交情绪报告"),
+        ("news_report", "新闻分析报告"),
         ("fundamentals_report", "基本面分析报告"),
     ]),
-    ("第二阶段：研究团队决策", [("investment_plan", "")]),
+    ("第二阶段：研究团队辩论", [
+        ("investment_debate_state.bull_history", "多头研究员辩论"),
+        ("investment_debate_state.bear_history", "空头研究员辩论"),
+        ("investment_plan", "研究经理总结"),
+    ]),
     ("第三阶段：交易团队计划", [("trader_investment_plan", "")]),
-    ("第四/五阶段：风险管理与最终决策", [("final_trade_decision", "")]),
+    ("第四/五阶段：风险管理与最终决策", [
+        ("risk_debate_state.aggressive_history", "激进型分析师辩论"),
+        ("risk_debate_state.conservative_history", "保守型分析师辩论"),
+        ("risk_debate_state.neutral_history", "中立型分析师辩论"),
+        ("final_trade_decision", "最终投资决策"),
+    ]),
 ]
 
 _CSS = (
@@ -52,7 +61,7 @@ def _build_html(final_state: dict, ticker: str, trade_date: str) -> str:
     for section_title, keys in _SECTIONS:
         chunk = []
         for key, sub_title in keys:
-            val = final_state.get(key)
+            val = _get_section(final_state, key)
             if val:
                 html_md = markdown2.markdown(
                     val, extras=["tables", "fenced-code-blocks", "header-ids"]
@@ -62,6 +71,15 @@ def _build_html(final_state: dict, ticker: str, trade_date: str) -> str:
             parts.append(f"<h2>{section_title}</h2>" + "\n".join(chunk))
     body = "\n".join(parts)
     return f"<html><head><meta charset='UTF-8'><style>{_CSS}</style></head><body>{body}</body></html>"
+
+
+def _get_section(final_state: dict, key: str) -> str:
+    value: object = final_state
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return ""
+        value = value.get(part, "")
+    return value if isinstance(value, str) else ""
 
 
 def _render_pdf(html: str) -> bytes:

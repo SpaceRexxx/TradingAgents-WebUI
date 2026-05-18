@@ -22,7 +22,9 @@ it("renders history rows", async () => {
   vi.stubGlobal("fetch", fetchMock(() => ({ items: [ITEM] })));
   render(<HistoryPage />);
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "AAPL 2026-01-02" })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "AAPL" })).toBeInTheDocument());
+  expect(screen.getByRole("link", { name: "AAPL" }))
+    .toHaveAttribute("href", "/history/AAPL/2026-01-02");
   expect(screen.getByText("Buy")).toBeInTheDocument();
 });
 
@@ -30,7 +32,7 @@ it("filters by ticker", async () => {
   const f = fetchMock(() => ({ items: [ITEM] }));
   vi.stubGlobal("fetch", f);
   render(<HistoryPage />);
-  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-02" }));
+  await waitFor(() => screen.getByRole("link", { name: "AAPL" }));
   await userEvent.type(screen.getByPlaceholderText("按 ticker 过滤"), "AAPL");
   await userEvent.click(screen.getByRole("button", { name: "查询" }));
   await waitFor(() =>
@@ -42,8 +44,8 @@ it("saves a note via PATCH", async () => {
     init?.method === "PATCH" ? { ticker: "AAPL", trade_date: "2026-01-02", updated: true } : { items: [ITEM] });
   vi.stubGlobal("fetch", f);
   render(<HistoryPage />);
-  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-02" }));
-  await userEvent.click(screen.getByRole("button", { name: "AAPL 2026-01-02" }));
+  await waitFor(() => screen.getByRole("button", { name: "备注" }));
+  await userEvent.click(screen.getByRole("button", { name: "备注" }));
   await userEvent.type(await screen.findByPlaceholderText("备注"), "looks good");
   await userEvent.click(screen.getByRole("button", { name: "保存备注" }));
   await waitFor(() =>
@@ -54,8 +56,8 @@ it("saves a note via PATCH", async () => {
 it("PDF link points at the runs endpoint", async () => {
   vi.stubGlobal("fetch", fetchMock(() => ({ items: [ITEM] })));
   render(<HistoryPage />);
-  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-02" }));
-  await userEvent.click(screen.getByRole("button", { name: "AAPL 2026-01-02" }));
+  await waitFor(() => screen.getByRole("button", { name: "备注" }));
+  await userEvent.click(screen.getByRole("button", { name: "备注" }));
   expect(await screen.findByRole("link", { name: "下载 PDF" }))
     .toHaveAttribute("href", "/api/runs/AAPL/2026-01-02/pdf");
 });
@@ -76,8 +78,20 @@ const DIFF_RESP = {
   a: { ticker: "AAPL", trade_date: "2026-01-01" },
   b: { ticker: "AAPL", trade_date: "2026-02-01" },
   sections: {
-    final_trade_decision: { changed: true, diff: "- BUY\n+ SELL" },
-    market_report: { changed: false, diff: "" },
+    final_trade_decision: {
+      title: "最终投资决策",
+      changed: true,
+      diff: "- BUY\n+ SELL",
+      a_text: "BUY",
+      b_text: "SELL",
+    },
+    market_report: {
+      title: "市场分析报告",
+      changed: false,
+      diff: "",
+      a_text: "market same",
+      b_text: "market same",
+    },
   },
 };
 
@@ -90,7 +104,7 @@ it("compares two runs", async () => {
   });
   vi.stubGlobal("fetch", f);
   render(<HistoryPage />);
-  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-01" }));
+  await waitFor(() => screen.getAllByRole("link", { name: "AAPL" })[0]);
 
   // Select A and B
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 A" }), "AAPL|2026-01-01");
@@ -104,9 +118,9 @@ it("compares two runs", async () => {
     )
   );
 
-  expect(await screen.findByText("final_trade_decision")).toBeInTheDocument();
-  expect(screen.getByText(/- BUY/)).toBeInTheDocument();
-  expect(screen.getByText(/\+ SELL/)).toBeInTheDocument();
+  expect(await screen.findByText("最终投资决策")).toBeInTheDocument();
+  expect(screen.getByText("BUY")).toBeInTheDocument();
+  expect(screen.getByText("SELL")).toBeInTheDocument();
   expect(screen.getByText("无变更")).toBeInTheDocument();
 });
 
@@ -119,7 +133,7 @@ it("diff 404 toasts an error", async () => {
   });
   vi.stubGlobal("fetch", f);
   render(<HistoryPage />);
-  await waitFor(() => screen.getByRole("button", { name: "AAPL 2026-01-01" }));
+  await waitFor(() => screen.getAllByRole("link", { name: "AAPL" })[0]);
 
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 A" }), "AAPL|2026-01-01");
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "对比 B" }), "AAPL|2026-02-01");
@@ -133,7 +147,7 @@ it("diff 404 toasts an error", async () => {
   );
 
   // No diff panel should appear
-  expect(screen.queryByText("final_trade_decision")).toBeNull();
+  expect(screen.queryByText("最终投资决策")).toBeNull();
 });
 
 // --- NEW TESTS: loading / empty / error states ---

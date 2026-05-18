@@ -2,7 +2,7 @@ import type {
   Health, StartAnalysisRequest, StartAnalysisResponse, AbortResponse,
   HistoryListResponse, PatchHistoryRequest, DiffResponse,
   DiagnosticsResponse, ProviderListResponse, SetKeyResponse, TestProviderResponse,
-  Quote, CumulativeStats, AppSettings,
+  Quote, CumulativeStats, AppSettings, RunReportResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -86,3 +86,12 @@ export const getCumulativeStats = () =>
 
 export const pdfUrl = (ticker: string, tradeDate: string) =>
   `/api/runs/${encodeURIComponent(ticker)}/${encodeURIComponent(tradeDate)}/pdf`;
+
+export const reportUrl = (ticker: string, tradeDate: string) =>
+  `/history/${encodeURIComponent(ticker)}/${encodeURIComponent(tradeDate)}`;
+
+export const getRunReport = (ticker: string, tradeDate: string) =>
+  req<RunReportResponse>(
+    `/api/runs/${encodeURIComponent(ticker)}/${encodeURIComponent(tradeDate)}/report`,
+    { method: "GET" },
+  );

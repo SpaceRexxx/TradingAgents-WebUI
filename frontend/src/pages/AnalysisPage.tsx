@@ -417,6 +417,12 @@ export default function AnalysisPage() {
           title="本次分析透明度"
           metrics={[
             { label: "输入 tokens", value: fmtInt(stream.tokenStats.input_tokens) },
+            ...(stream.tokenStats.cached_input_tokens || stream.tokenStats.uncached_input_tokens
+              ? [
+                  { label: "缓存输入", value: fmtInt(stream.tokenStats.cached_input_tokens ?? 0) },
+                  { label: "非缓存输入", value: fmtInt(stream.tokenStats.uncached_input_tokens ?? 0) },
+                ]
+              : []),
             { label: "输出 tokens", value: fmtInt(stream.tokenStats.output_tokens) },
             { label: "总 tokens", value: fmtInt(stream.tokenStats.total_tokens) },
             { label: "估算成本 (USD)", value: fmtCost(stream.tokenStats.cost_usd) },

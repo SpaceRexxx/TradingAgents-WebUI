@@ -93,8 +93,11 @@ class DiffSide(BaseModel):
 
 
 class DiffSection(BaseModel):
+    title: str = ""
     changed: bool
     diff: str
+    a_text: str = ""
+    b_text: str = ""
 
 
 class DiffResponse(BaseModel):

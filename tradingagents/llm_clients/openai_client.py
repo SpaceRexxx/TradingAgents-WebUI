@@ -175,7 +175,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "streaming",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "stream_usage", "api_key", "callbacks", "http_client", "http_async_client",
 )
 
 # Provider base URLs. API-key env vars live in api_key_env.PROVIDER_API_KEY_ENV
@@ -247,6 +247,8 @@ class OpenAIClient(BaseLLMClient):
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
+        if llm_kwargs.get("streaming") and "stream_usage" not in llm_kwargs:
+            llm_kwargs["stream_usage"] = True
 
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.

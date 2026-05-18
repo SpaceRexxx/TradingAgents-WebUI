@@ -6,6 +6,7 @@ import AnalysisPage from "./pages/AnalysisPage";
 import ConfigPage from "./pages/ConfigPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
 import HistoryPage from "./pages/HistoryPage";
+import RunReportPage from "./pages/RunReportPage";
 import "./styles/tokens.css";
 import "./styles/components.css";
 
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/analysis" replace /> },
       { path: "analysis", element: <AnalysisPage /> },
       { path: "history", element: <HistoryPage /> },
+      { path: "history/:ticker/:tradeDate", element: <RunReportPage /> },
       { path: "config", element: <ConfigPage /> },
       { path: "diagnostics", element: <DiagnosticsPage /> },
     ],

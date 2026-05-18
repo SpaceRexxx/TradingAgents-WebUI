@@ -89,6 +89,20 @@ describe("api client", () => {
     expect(api.pdfUrl("AAPL", "2026-01-02")).toBe("/api/runs/AAPL/2026-01-02/pdf");
   });
 
+  it("reportUrl builds the frontend report path", () => {
+    expect(api.reportUrl("AAPL", "2026-01-02")).toBe("/history/AAPL/2026-01-02");
+  });
+
+  it("getRunReport GETs the report path", async () => {
+    const f = mockFetch(200, { ticker: "AAPL", trade_date: "2026-01-02", final_state: {} });
+    vi.stubGlobal("fetch", f);
+    await api.getRunReport("AAPL", "2026-01-02");
+    expect(f).toHaveBeenCalledWith(
+      "/api/runs/AAPL/2026-01-02/report",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("throws ApiError with status + detail on non-2xx", async () => {
     const f = mockFetch(404, { detail: "nope" });
     vi.stubGlobal("fetch", f);

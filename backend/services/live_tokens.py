@@ -146,6 +146,40 @@ class LiveTokenCallback(BaseCallbackHandler):
             self._runs.pop(str(run_id), None)
 
 
+class CompositeCallback(BaseCallbackHandler):
+    """Fan out LangChain callback events to multiple handlers.
+
+    This lets the UI streaming callback and the token-usage callback observe
+    every LLM run without relying on graph state chunks carrying messages.
+    """
+
+    def __init__(self, *handlers: BaseCallbackHandler):
+        super().__init__()
+        self._handlers = handlers
+
+    def on_chat_model_start(self, serialized, messages, *, run_id, **kwargs) -> None:
+        self._call("on_chat_model_start", serialized, messages, run_id=run_id, **kwargs)
+
+    def on_llm_start(self, serialized, prompts, *, run_id, **kwargs) -> None:
+        self._call("on_llm_start", serialized, prompts, run_id=run_id, **kwargs)
+
+    def on_llm_new_token(self, token: str, *, run_id, **kwargs) -> None:
+        self._call("on_llm_new_token", token, run_id=run_id, **kwargs)
+
+    def on_llm_end(self, response, *, run_id, **kwargs) -> None:
+        self._call("on_llm_end", response, run_id=run_id, **kwargs)
+
+    def on_llm_error(self, error: BaseException, *, run_id, **kwargs) -> None:
+        self._call("on_llm_error", error, run_id=run_id, **kwargs)
+
+    def _call(self, method_name: str, *args, **kwargs) -> None:
+        for handler in self._handlers:
+            method = getattr(handler, method_name, None)
+            if method is None:
+                continue
+            method(*args, **kwargs)
+
+
 def clear_streaming_payload(
     chunk: dict[str, Any],
     seen_agents: set[str] | None = None,

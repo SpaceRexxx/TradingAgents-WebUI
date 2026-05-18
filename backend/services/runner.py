@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from backend.deps import get_settings_dep
-from backend.services.live_tokens import LiveTokenCallback, clear_streaming_payload
+from backend.services.live_tokens import CompositeCallback, LiveTokenCallback, clear_streaming_payload
 from backend.services.persistence import persist_run
 from backend.services.registry import RunHandle, RunRegistry
-from backend.services.token_stats import TokenAccumulator, accumulate_cumulative
+from backend.services.token_stats import TokenAccumulator, TokenUsageCallback, accumulate_cumulative
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,9 @@ async def _run(
     # Track in-flight chunk futures so we can drain them before marking done.
     _chunk_futures: list[concurrent.futures.Future] = []
     token_acc = TokenAccumulator()
+    token_callback = TokenUsageCallback(token_acc)
     live_callback = LiveTokenCallback(lambda chunk: _emit_chunk(chunk))
+    graph_callback = CompositeCallback(live_callback, token_callback)
 
     def _emit_chunk(chunk: dict[str, Any]) -> None:
         # Accumulate token/tool stats here while `chunk` still holds the raw
@@ -91,7 +93,7 @@ async def _run(
         factory_cfg = {
             **request.config_overrides,
             "results_dir": settings_results_dir,
-            "__callbacks": [live_callback],
+            "__callbacks": [graph_callback],
         }
         graph = graph_factory(factory_cfg)
         cfg = getattr(graph, "config", {}) or {}
