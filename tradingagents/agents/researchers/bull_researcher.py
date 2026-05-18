@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_language_instruction,
+    get_methodology,
+)
 
 
 def create_bull_researcher(llm):
@@ -32,7 +35,7 @@ def create_bull_researcher(llm):
 
 请利用这些信息，提出一个令人信服的看涨论点，反驳空头的担忧，并参与一场动态辩论，以展示多头立场的优势。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction() + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("researcher")
 
         response = llm.invoke(prompt)
 
