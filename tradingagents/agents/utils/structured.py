@@ -45,35 +45,31 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
         return None
 
 
-def invoke_structured_or_freetext(
+def invoke_structured_or_freetext_capture(
     structured_llm: Optional[Any],
     plain_llm: Any,
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
-) -> str:
-    """Run the structured call and render to markdown; fall back to free-text on any failure.
+) -> tuple[str, Optional[T]]:
+    """Like invoke_structured_or_freetext but also returns the parsed object.
 
-    ``prompt`` is whatever the underlying LLM accepts (a string for chat
-    invocations, a list of message dicts for chat models that take that
-    shape). The same value is forwarded to the free-text path so the
-    fallback sees the same input the structured call did.
+    Returns ``(markdown, parsed)``. ``parsed`` is the typed Pydantic
+    instance when structured output succeeded, or ``None`` when the
+    free-text fallback fired (so callers can decide whether to expose the
+    structured fields downstream).
     """
     if structured_llm is not None:
         try:
             result = structured_llm.invoke(prompt)
             if result is None:
-                # Some providers (notably DeepSeek) silently return None when
-                # the model fails to emit a tool-call; treat as failure so we
-                # fall through to free-text instead of raising AttributeError
-                # inside render() and confusing the log.
                 logger.warning(
                     "%s: structured-output returned None (model emitted no "
                     "tool-call); retrying once as free text",
                     agent_name,
                 )
             else:
-                return render(result)
+                return render(result), result
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying once as free text",
@@ -81,4 +77,18 @@ def invoke_structured_or_freetext(
             )
 
     response = plain_llm.invoke(prompt)
-    return response.content
+    return response.content, None
+
+
+def invoke_structured_or_freetext(
+    structured_llm: Optional[Any],
+    plain_llm: Any,
+    prompt: Any,
+    render: Callable[[T], str],
+    agent_name: str,
+) -> str:
+    """Backward-compatible wrapper: returns only the rendered markdown."""
+    markdown, _ = invoke_structured_or_freetext_capture(
+        structured_llm, plain_llm, prompt, render, agent_name
+    )
+    return markdown

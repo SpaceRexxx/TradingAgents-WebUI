@@ -46,3 +46,44 @@ def test_conviction_score_rejects_out_of_range():
                 rating="Buy", executive_summary="s", investment_thesis="t",
                 conviction_score=bad,
             )
+
+
+def test_capture_returns_markdown_and_parsed_object():
+    from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
+    from tradingagents.agents.utils.structured import (
+        invoke_structured_or_freetext_capture,
+    )
+
+    obj = PortfolioDecision(
+        rating="Buy", executive_summary="s", investment_thesis="t",
+        conviction_score=9,
+    )
+
+    class FakeStructured:
+        def invoke(self, _prompt):
+            return obj
+
+    md, parsed = invoke_structured_or_freetext_capture(
+        FakeStructured(), object(), "prompt", render_pm_decision, "PM"
+    )
+    assert "**Rating**: Buy" in md
+    assert parsed is obj
+
+
+def test_capture_freetext_fallback_returns_none_object():
+    from tradingagents.agents.schemas import render_pm_decision
+    from tradingagents.agents.utils.structured import (
+        invoke_structured_or_freetext_capture,
+    )
+
+    class FakePlain:
+        def invoke(self, _prompt):
+            class R:
+                content = "free text decision"
+            return R()
+
+    md, parsed = invoke_structured_or_freetext_capture(
+        None, FakePlain(), "prompt", render_pm_decision, "PM"
+    )
+    assert md == "free text decision"
+    assert parsed is None

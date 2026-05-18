@@ -21,7 +21,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
-    invoke_structured_or_freetext,
+    invoke_structured_or_freetext_capture,
 )
 from tradingagents.dataflows.config import get_config
 
@@ -105,7 +105,7 @@ def create_portfolio_manager(llm):
 
 请果断决策，并将每个结论锚定在分析师辩论中的具体证据上。所有字段必须针对用户的"{has_position}"状态提供个性化建议。{get_language_instruction()}"""
 
-        final_trade_decision = invoke_structured_or_freetext(
+        final_trade_decision, decision_obj = invoke_structured_or_freetext_capture(
             structured_llm,
             llm,
             prompt,
@@ -129,6 +129,9 @@ def create_portfolio_manager(llm):
         return {
             "risk_debate_state": new_risk_debate_state,
             "final_trade_decision": final_trade_decision,
+            "portfolio_decision": (
+                decision_obj.model_dump() if decision_obj is not None else None
+            ),
         }
 
     return portfolio_manager_node
