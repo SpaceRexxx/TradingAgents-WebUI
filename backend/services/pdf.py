@@ -83,9 +83,15 @@ def _decision_table_html(decision: dict) -> str:
     thesis = decision.get("investment_thesis") or ""
     blocks = [table]
     if summary:
-        blocks.append(f"<h3>核心决策摘要</h3>{markdown2.markdown(str(summary))}")
+        blocks.append(
+            f"<h3>核心决策摘要</h3>"
+            f"{markdown2.markdown(str(summary), extras=['tables', 'fenced-code-blocks', 'header-ids'])}"
+        )
     if thesis:
-        blocks.append(f"<h3>投资论据</h3>{markdown2.markdown(str(thesis))}")
+        blocks.append(
+            f"<h3>投资论据</h3>"
+            f"{markdown2.markdown(str(thesis), extras=['tables', 'fenced-code-blocks', 'header-ids'])}"
+        )
     return "\n".join(b for b in blocks if b)
 
 

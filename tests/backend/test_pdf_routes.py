@@ -125,7 +125,7 @@ def test_pdf_html_renders_decision_table_and_footer():
     assert "<table" in html
     assert "8/10" in html
     assert "建仓区间 250-255" in html
-    assert "240" in html
+    assert "240.0" in html
     assert "本报告由 AI 多智能体系统自动生成" in html
     assert "deepseek-v4-pro" in html
 
