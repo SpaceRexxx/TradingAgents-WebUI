@@ -18,6 +18,7 @@ from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
+    get_methodology,
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
@@ -104,6 +105,8 @@ def create_portfolio_manager(llm):
 ---
 
 请果断决策，并将每个结论锚定在分析师辩论中的具体证据上。所有字段必须针对用户的"{has_position}"状态提供个性化建议。{get_language_instruction()}"""
+
+        prompt = prompt + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("portfolio_manager")
 
         final_trade_decision, decision_obj = invoke_structured_or_freetext_capture(
             structured_llm,

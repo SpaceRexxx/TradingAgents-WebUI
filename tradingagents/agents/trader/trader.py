@@ -10,6 +10,7 @@ from tradingagents.agents.schemas import TraderProposal, render_trader_proposal
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
+    get_methodology,
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
@@ -33,6 +34,8 @@ def create_trader(llm):
                     "根据你的分析，提供具体的买入、卖出或持有建议。"
                     "将你的推理锚定在分析师报告和研究计划中。"
                     + get_language_instruction()
+                    + "\n\n---\n以下是必须遵循的分析方法论:\n"
+                    + get_methodology("trader")
                 ),
             },
             {

@@ -6,6 +6,7 @@ from tradingagents.agents.schemas import ResearchPlan, render_research_plan
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
+    get_methodology,
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
@@ -52,7 +53,7 @@ def create_research_manager(llm):
 {lessons_line}---
 
 **辩论历史：**
-{history}""" + get_language_instruction()
+{history}""" + get_language_instruction() + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("research_manager")
 
         investment_plan = invoke_structured_or_freetext(
             structured_llm,
