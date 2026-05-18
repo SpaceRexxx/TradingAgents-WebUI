@@ -33,3 +33,17 @@ def test_analyst_modules_import():
         "tradingagents.agents.analysts.sentiment_analyst",
     ):
         importlib.import_module(mod)
+
+
+def test_phase_a_methodology_keys_present_and_nonempty():
+    for key in (
+        "researcher",
+        "risk_debate",
+        "research_manager",
+        "portfolio_manager",
+        "trader",
+    ):
+        text = get_methodology(key)
+        assert text != "", f"missing methodology: {key}"
+        assert "引用即纪律" in text, f"cite-or-flag rule missing in: {key}"
+        assert "【自检】" in text, f"self-check block missing in: {key}"
