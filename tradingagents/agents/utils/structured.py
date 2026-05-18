@@ -63,6 +63,10 @@ def invoke_structured_or_freetext_capture(
         try:
             result = structured_llm.invoke(prompt)
             if result is None:
+                # Some providers (notably DeepSeek) silently return None when
+                # the model fails to emit a tool-call; treat as failure so we
+                # fall through to free-text instead of raising AttributeError
+                # inside render() and confusing the log.
                 logger.warning(
                     "%s: structured-output returned None (model emitted no "
                     "tool-call); retrying once as free text",
