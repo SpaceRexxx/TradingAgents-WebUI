@@ -88,3 +88,28 @@ def test_persist_run_keeps_json_when_pdf_generation_fails(tmp_path: Path, monkey
     rows = sqlite_history.query_analyses(tmp_path, ticker="TEST")
     assert rows[0]["json_path"] == str(json_file)
     assert rows[0]["pdf_path"] is None
+
+
+def test_persist_run_writes_run_meta(tmp_path: Path, monkeypatch):
+    from backend.services import pdf as pdf_service
+
+    monkeypatch.setattr(pdf_service, "_render_pdf", lambda html: b"%PDF-1.4 x")
+    persist_run(
+        results_dir=tmp_path,
+        ticker="META",
+        trade_date="2026-02-02",
+        final_state={"final_trade_decision": "Buy: x", "market_report": "m"},
+        model="deepseek-v4-pro",
+        provider="DeepSeek",
+        token_stats={"total_tokens": 1234, "cost_usd": 0.05},
+    )
+    saved = json.loads(
+        (tmp_path / "META" / "2026-02-02" / "final_state_report.json").read_text()
+    )
+    meta = saved["run_meta"]
+    assert meta["model"] == "deepseek-v4-pro"
+    assert meta["provider"] == "DeepSeek"
+    assert meta["tokens"]["total_tokens"] == 1234
+    assert meta["tokens"]["cost_usd"] == 0.05
+    assert meta["generated_at"].endswith("Z")  # ISO8601 UTC
+    assert "不构成任何投资" in meta["disclaimer"]

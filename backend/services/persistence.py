@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,11 @@ from backend.services import pdf as pdf_service
 from tradingagents.storage import sqlite_history
 
 logger = logging.getLogger(__name__)
+
+DISCLAIMER = (
+    "本报告由 AI 多智能体系统自动生成,仅供研究参考,不构成任何投资、"
+    "法律或税务建议。所有结论须经合格专业人士复核后方可作为决策依据。"
+)
 
 
 def persist_run(
@@ -28,6 +34,20 @@ def persist_run(
     serializable = {k: v for k, v in final_state.items() if k != "messages"}
     if token_stats is not None:
         serializable["token_stats"] = token_stats
+    ts = token_stats or {}
+    serializable["run_meta"] = {
+        "generated_at": datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "model": model,
+        "provider": provider,
+        "tokens": {
+            "total_tokens": ts.get("total_tokens"),
+            "cost_usd": ts.get("cost_usd"),
+        },
+        "disclaimer": DISCLAIMER,
+    }
     json_path = save_path / "final_state_report.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(serializable, f, ensure_ascii=False, indent=4)
