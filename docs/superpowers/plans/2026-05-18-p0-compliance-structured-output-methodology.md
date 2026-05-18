@@ -10,6 +10,8 @@
 
 **参考规格:** `docs/superpowers/specs/2026-05-18-p0-compliance-structured-output-methodology-design.md`
 
+**执行修正(Task 4):** `portfolio_decision` 已注册进 `tradingagents/agents/utils/agent_states.py` 的 `AgentState` TypedDict(否则 LangGraph 会丢弃该键,Task 6/7 拿不到)。Task 6/7 实现者可放心从 `final_state["portfolio_decision"]` 读取。
+
 **注意:** SQLite `analyses` 表已有 `created_at TEXT NOT NULL DEFAULT (datetime('now'))`(`tradingagents/storage/sqlite_history.py:76`),已满足审计时间戳需求,**无需** SQLite schema 变更;`generated_at` 仅写入 JSON `run_meta`。
 
 ---
@@ -320,11 +322,11 @@ git commit -m "feat(agents): 4 个分析师 system prompt 拼接外置方法论"
 
 **Files:**
 - Modify: `tradingagents/agents/schemas.py`(`PortfolioDecision` 类 + `render_pm_decision`)
-- Test: `tests/backend/test_structured_agents.py`(追加)
+- Test: `tests/backend/test_structured_agents.py`(**新建**;branch 3.1 上该文件不存在)
 
 - [ ] **Step 1: 写失败测试**
 
-Append to `tests/backend/test_structured_agents.py`:
+Create `tests/backend/test_structured_agents.py` with:
 
 ```python
 def test_portfolio_decision_has_optional_conviction_score():
@@ -428,7 +430,7 @@ git commit -m "feat(schemas): PortfolioDecision 新增可选 conviction_score(1-
 **Files:**
 - Modify: `tradingagents/agents/utils/structured.py`(新增 `invoke_structured_or_freetext_capture`)
 - Modify: `tradingagents/agents/managers/portfolio_manager.py`
-- Test: `tests/backend/test_structured_agents.py`(追加)
+- Test: `tests/backend/test_structured_agents.py`(追加到 Task 3 新建的文件)
 
 - [ ] **Step 1: 写失败测试**
 
