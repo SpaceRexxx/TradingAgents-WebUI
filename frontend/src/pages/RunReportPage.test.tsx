@@ -59,3 +59,41 @@ it("shows an error when the report is missing", async () => {
 
   expect(await screen.findByText(/加载报告失败: 404/)).toBeInTheDocument();
 });
+
+it("renders structured decision table and compliance footer", async () => {
+  const f = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      ticker: "AAPL",
+      trade_date: "2026-01-02",
+      final_state: {
+        market_report: "# M\nx",
+        portfolio_decision: {
+          rating: "Buy", conviction_score: 8,
+          executive_summary: "建仓 250-255", investment_thesis: "多头更强",
+          stop_loss: 240, time_horizon: "1-3 个月",
+        },
+        run_meta: {
+          generated_at: "2026-01-02T03:04:05Z", model: "deepseek-v4-pro",
+          provider: "DeepSeek", tokens: { total_tokens: 1234, cost_usd: 0.05 },
+          disclaimer: "本报告由 AI 多智能体系统自动生成,不构成任何投资建议。",
+        },
+      },
+    }),
+  } as unknown as Response);
+  vi.stubGlobal("fetch", f);
+
+  renderPage();
+
+  await waitFor(() =>
+    expect(f).toHaveBeenCalledWith(
+      "/api/runs/AAPL/2026-01-02/report",
+      expect.objectContaining({ method: "GET" }),
+    ),
+  );
+  expect(await screen.findByText("建仓 250-255")).toBeInTheDocument();
+  expect(screen.getByText("8/10")).toBeInTheDocument();
+  expect(screen.getByText(/不构成任何投资建议/)).toBeInTheDocument();
+  expect(screen.getByText(/deepseek-v4-pro/)).toBeInTheDocument();
+});

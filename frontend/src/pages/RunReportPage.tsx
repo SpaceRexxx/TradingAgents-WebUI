@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { getRunReport, pdfUrl } from "../api/client";
 import Markdown from "../components/Markdown";
+import type { PortfolioDecision, RunMeta } from "../api/types";
 
 type ReportSource =
   | { key: string; title: string }
@@ -53,7 +54,6 @@ const REPORT_GROUPS: ReportGroup[] = [
       { parent: "risk_debate_state", key: "aggressive_history", title: "激进型分析师辩论" },
       { parent: "risk_debate_state", key: "conservative_history", title: "保守型分析师辩论" },
       { parent: "risk_debate_state", key: "neutral_history", title: "中立型分析师辩论" },
-      { key: "final_trade_decision", title: "最终投资决策" },
     ],
   },
 ];
@@ -85,6 +85,66 @@ function buildGroups(finalState: Record<string, unknown>): RenderedReportGroup[]
   })).filter((group) => group.sections.length > 0);
 }
 
+const DECISION_ROWS: [keyof PortfolioDecision, string][] = [
+  ["rating", "评级"],
+  ["conviction_score", "信心度"],
+  ["price_target", "目标位"],
+  ["stop_loss", "止损位"],
+  ["breakout_point", "突破位"],
+  ["time_horizon", "时间窗口"],
+  ["outlook_30d", "30天展望"],
+  ["outlook_60d", "60天展望"],
+  ["outlook_90d", "90天展望"],
+];
+
+function DecisionCard({ d }: { d: PortfolioDecision }) {
+  return (
+    <section className="card col">
+      <h3>最终投资决策</h3>
+      <table className="decision-table">
+        <tbody>
+          {DECISION_ROWS.map(([k, label]) => {
+            const v = d[k];
+            if (v === null || v === undefined || v === "") return null;
+            const text = k === "conviction_score" ? `${v}/10` : String(v);
+            return (
+              <tr key={k}>
+                <td style={{ fontWeight: 600, width: "30%" }}>{label}</td>
+                <td>{text}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {d.executive_summary && (
+        <article>
+          <h4>核心决策摘要</h4>
+          <Markdown>{d.executive_summary}</Markdown>
+        </article>
+      )}
+      {d.investment_thesis && (
+        <article>
+          <h4>投资论据</h4>
+          <Markdown>{d.investment_thesis}</Markdown>
+        </article>
+      )}
+    </section>
+  );
+}
+
+function ComplianceFooter({ meta }: { meta: RunMeta }) {
+  return (
+    <section className="card col" style={{ fontSize: "0.8rem", color: "var(--muted, #94a3b8)" }}>
+      <div>
+        生成时间: {meta.generated_at} | 模型: {meta.model ?? "-"} | 供应商:{" "}
+        {meta.provider ?? "-"} | Tokens: {meta.tokens?.total_tokens ?? "-"} | 成本(USD):{" "}
+        {meta.tokens?.cost_usd ?? "-"}
+      </div>
+      <div>{meta.disclaimer}</div>
+    </section>
+  );
+}
+
 export default function RunReportPage() {
   const { ticker = "", tradeDate = "" } = useParams();
   const [finalState, setFinalState] = useState<Record<string, unknown> | null>(null);
@@ -114,6 +174,13 @@ export default function RunReportPage() {
     () => buildGroups(finalState ?? {}),
     [finalState],
   );
+
+  const decision = (finalState?.portfolio_decision ?? null) as PortfolioDecision | null;
+  const runMeta = (finalState?.run_meta ?? null) as RunMeta | null;
+  const fallbackDecision =
+    !decision && finalState && typeof finalState.final_trade_decision === "string"
+      ? (finalState.final_trade_decision as string)
+      : "";
 
   return (
     <div className="col">
@@ -154,6 +221,14 @@ export default function RunReportPage() {
           ))}
         </section>
       ))}
+      {!loading && !error && decision && <DecisionCard d={decision} />}
+      {!loading && !error && !decision && fallbackDecision && (
+        <section className="card col">
+          <h3>最终投资决策</h3>
+          <Markdown>{fallbackDecision}</Markdown>
+        </section>
+      )}
+      {!loading && !error && runMeta && <ComplianceFooter meta={runMeta} />}
     </div>
   );
 }

@@ -64,6 +64,28 @@ export interface RunReportResponse {
   final_state: Record<string, unknown>;
 }
 
+export interface PortfolioDecision {
+  rating: string;
+  conviction_score?: number | null;
+  executive_summary?: string;
+  investment_thesis?: string;
+  price_target?: number | null;
+  stop_loss?: number | null;
+  breakout_point?: number | null;
+  time_horizon?: string | null;
+  outlook_30d?: string | null;
+  outlook_60d?: string | null;
+  outlook_90d?: string | null;
+}
+
+export interface RunMeta {
+  generated_at: string;
+  model: string | null;
+  provider: string | null;
+  tokens: { total_tokens: number | null; cost_usd: number | null };
+  disclaimer: string;
+}
+
 export interface DiffSection {
   title: string;
   changed: boolean;
