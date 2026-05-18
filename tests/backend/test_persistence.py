@@ -113,3 +113,25 @@ def test_persist_run_writes_run_meta(tmp_path: Path, monkeypatch):
     assert meta["tokens"]["cost_usd"] == 0.05
     assert meta["generated_at"].endswith("Z")  # ISO8601 UTC
     assert "不构成任何投资" in meta["disclaimer"]
+
+
+def test_persist_run_run_meta_tokens_null_when_no_token_stats(tmp_path: Path, monkeypatch):
+    from backend.services import pdf as pdf_service
+
+    monkeypatch.setattr(pdf_service, "_render_pdf", lambda html: b"%PDF-1.4 x")
+    persist_run(
+        results_dir=tmp_path,
+        ticker="NONE",
+        trade_date="2026-03-03",
+        final_state={"final_trade_decision": "Hold"},
+        model="m",
+        provider="p",
+        # token_stats omitted -> None
+    )
+    saved = json.loads(
+        (tmp_path / "NONE" / "2026-03-03" / "final_state_report.json").read_text()
+    )
+    meta = saved["run_meta"]
+    assert meta["tokens"]["total_tokens"] is None
+    assert meta["tokens"]["cost_usd"] is None
+    assert "不构成任何投资" in meta["disclaimer"]
