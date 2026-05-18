@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_language_instruction,
+    get_methodology,
+)
 
 
 def create_neutral_debator(llm):
@@ -32,7 +35,7 @@ def create_neutral_debator(llm):
 
 通过批判性地分析双方观点来积极参与，指出激进和保守论点中的弱点，以倡导一种更平衡的方法。挑战他们的每一个论点，以说明为什么一个温和的风险策略可能两全其美，既提供增长潜力，又防范极端波动。专注于辩论，而不仅仅是呈现数据，旨在表明一个平衡的观点可以带来最可靠的结果。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction() + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("risk_debate")
 
         response = llm.invoke(prompt)
 

@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_language_instruction,
+    get_methodology,
+)
 
 
 def create_conservative_debator(llm):
@@ -32,7 +35,7 @@ def create_conservative_debator(llm):
 
 通过质疑他们的乐观态度并强调他们可能忽视的潜在缺点来参与辩论。回应他们的每一个反驳点，以展示为什么保守立场最终是公司资产最安全的路径。专注于辩论和批判他们的论点，以证明低风险策略优于他们的方法。请像平常说话一样以对话方式输出，不要使用任何特殊格式。
 
-**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction()
+**重要指令：你的所有分析和回复都必须使用中文撰写。**""" + get_language_instruction() + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("risk_debate")
 
         response = llm.invoke(prompt)
 
