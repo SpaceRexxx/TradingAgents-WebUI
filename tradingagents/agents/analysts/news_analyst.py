@@ -4,6 +4,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_global_news,
     get_language_instruction,
+    get_methodology,
     get_news,
 )
 from tradingagents.dataflows.eastmoney_sentiment import to_a_share_code
@@ -36,6 +37,8 @@ def create_news_analyst(llm):
             "**重要指令：你的所有分析和最终报告都必须使用中文撰写。**"
             + extra_a_share_instruction
             + get_language_instruction()
+            + "\n\n---\n以下是必须遵循的分析方法论:\n"
+            + get_methodology("news")
         )
 
         agent = create_react_agent(llm, tools)

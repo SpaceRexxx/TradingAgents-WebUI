@@ -25,6 +25,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
+    get_methodology,
     get_news,
 )
 from tradingagents.dataflows.config import get_config
@@ -181,7 +182,7 @@ def _build_system_message(
             "阅读正文摘要以获取上下文 —— 仅看标题常常误导。"
         )
 
-    return f"""你是一名金融市场情绪分析师。你的任务是为 {ticker} 在 {start_date} 至 {end_date} 期间，基于以下三个已经预先采集好的互补数据源，撰写一份全面的情绪分析报告。
+    _base = f"""你是一名金融市场情绪分析师。你的任务是为 {ticker} 在 {start_date} 至 {end_date} 期间，基于以下三个已经预先采集好的互补数据源，撰写一份全面的情绪分析报告。
 
 ## 数据源（已预先获取，包含在本提示中）
 
@@ -238,6 +239,7 @@ def _build_system_message(
 6. **报告末尾附 Markdown 表格**，汇总关键情绪信号、方向、来源和支撑证据。
 
 **重要指令：你的所有标题、章节名称、字段名和正文必须全部使用中文撰写。禁止使用任何英文章节标题（如 "Overall Sentiment Direction"、"Source-by-Source Breakdown" 等）。**{get_language_instruction()}"""
+    return _base + "\n\n---\n以下是必须遵循的分析方法论:\n" + get_methodology("sentiment")
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_indicators,
     get_language_instruction,
+    get_methodology,
     get_stock_data,
 )
 
@@ -30,6 +31,8 @@ def create_market_analyst(llm):
             "- 请撰写一份非常详尽和细致入微的分析报告。报告结尾附带 Markdown 表格。\n"
             "- **所有分析和最终报告都必须使用中文撰写。**"
             + get_language_instruction()
+            + "\n\n---\n以下是必须遵循的分析方法论:\n"
+            + get_methodology("market")
         )
 
         # 使用隔离的 React Agent 来处理内部工具调用循环

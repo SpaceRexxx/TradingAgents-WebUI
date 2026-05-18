@@ -8,6 +8,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_income_statement,
     get_insider_transactions,
     get_language_instruction,
+    get_methodology,
 )
 
 def create_fundamentals_analyst(llm):
@@ -32,6 +33,8 @@ def create_fundamentals_analyst(llm):
             "确保在报告末尾附加一个Markdown表格，以有组织地整理关键点。\n"
             "**重要指令：你的所有分析和最终报告都必须使用中文撰写。**"
             + get_language_instruction()
+            + "\n\n---\n以下是必须遵循的分析方法论:\n"
+            + get_methodology("fundamentals")
         )
 
         agent = create_react_agent(llm, tools)
