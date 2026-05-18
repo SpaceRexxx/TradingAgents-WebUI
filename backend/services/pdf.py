@@ -23,7 +23,6 @@ _SECTIONS = [
         ("risk_debate_state.aggressive_history", "激进型分析师辩论"),
         ("risk_debate_state.conservative_history", "保守型分析师辩论"),
         ("risk_debate_state.neutral_history", "中立型分析师辩论"),
-        ("final_trade_decision", "最终投资决策"),
     ]),
 ]
 
@@ -35,7 +34,9 @@ _CSS = (
     "h3 { font-size: 13pt; color: #475569; margin-top: 20px;} "
     "table { border-collapse: collapse; width: 100%; margin-top: 15px; } "
     "th, td { border: 1px solid #e2e8f0; text-align: left; padding: 8px; } "
-    "th { background-color: #f8fafc; font-weight: bold; }"
+    "th { background-color: #f8fafc; font-weight: bold; } "
+    ".decision-table td:first-child { background:#f8fafc; font-weight:bold; width:30%; } "
+    ".report-footer { margin-top:30px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:8pt; color:#94a3b8; }"
 )
 
 _RENDER_SCRIPT = """
@@ -51,6 +52,57 @@ with sync_playwright() as p:
     browser.close()
     sys.stdout.buffer.write(pdf_bytes)
 """
+
+
+_DECISION_ROWS = [
+    ("rating", "评级"),
+    ("conviction_score", "信心度"),
+    ("price_target", "目标位"),
+    ("stop_loss", "止损位"),
+    ("breakout_point", "突破位"),
+    ("time_horizon", "时间窗口"),
+    ("outlook_30d", "30天展望"),
+    ("outlook_60d", "60天展望"),
+    ("outlook_90d", "90天展望"),
+]
+
+
+def _decision_table_html(decision: dict) -> str:
+    rows = []
+    for key, label in _DECISION_ROWS:
+        val = decision.get(key)
+        if val is None or val == "":
+            continue
+        cell = f"{val}/10" if key == "conviction_score" else val
+        rows.append(
+            f"<tr><td>{html.escape(label)}</td>"
+            f"<td>{html.escape(str(cell))}</td></tr>"
+        )
+    table = f"<table class='decision-table'>{''.join(rows)}</table>" if rows else ""
+    summary = decision.get("executive_summary") or ""
+    thesis = decision.get("investment_thesis") or ""
+    blocks = [table]
+    if summary:
+        blocks.append(f"<h3>核心决策摘要</h3>{markdown2.markdown(str(summary))}")
+    if thesis:
+        blocks.append(f"<h3>投资论据</h3>{markdown2.markdown(str(thesis))}")
+    return "\n".join(b for b in blocks if b)
+
+
+def _footer_html(final_state: dict) -> str:
+    meta = final_state.get("run_meta")
+    if not isinstance(meta, dict):
+        return ""
+    tokens = meta.get("tokens") or {}
+    line = (
+        f"生成时间: {html.escape(str(meta.get('generated_at') or '-'))} | "
+        f"模型: {html.escape(str(meta.get('model') or '-'))} | "
+        f"供应商: {html.escape(str(meta.get('provider') or '-'))} | "
+        f"Tokens: {html.escape(str(tokens.get('total_tokens') or '-'))} | "
+        f"成本(USD): {html.escape(str(tokens.get('cost_usd') or '-'))}"
+    )
+    disclaimer = html.escape(str(meta.get("disclaimer") or ""))
+    return f"<div class='report-footer'><p>{line}</p><p>{disclaimer}</p></div>"
 
 
 def _build_html(final_state: dict, ticker: str, trade_date: str) -> str:
@@ -69,7 +121,18 @@ def _build_html(final_state: dict, ticker: str, trade_date: str) -> str:
                 chunk.append(f"<h3>{sub_title}</h3>{html_md}" if sub_title else html_md)
         if chunk:
             parts.append(f"<h2>{section_title}</h2>" + "\n".join(chunk))
-    body = "\n".join(parts)
+    decision = final_state.get("portfolio_decision")
+    if isinstance(decision, dict):
+        parts.append("<h2>最终投资决策</h2>" + _decision_table_html(decision))
+    elif final_state.get("final_trade_decision"):
+        parts.append(
+            "<h2>最终投资决策</h2>"
+            + markdown2.markdown(
+                str(final_state["final_trade_decision"]),
+                extras=["tables", "fenced-code-blocks", "header-ids"],
+            )
+        )
+    body = "\n".join(parts) + _footer_html(final_state)
     return f"<html><head><meta charset='UTF-8'><style>{_CSS}</style></head><body>{body}</body></html>"
 
 

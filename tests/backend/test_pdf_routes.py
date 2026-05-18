@@ -92,3 +92,50 @@ def test_pdf_content_disposition_is_sanitized(tmp_path, monkeypatch):
         # The raw double-quote from the ticker must be gone; only the
         # surrounding filename="" quotes remain.
         assert cd == 'inline; filename="AA_X_2026-01-01.pdf"'
+
+
+def test_pdf_html_renders_decision_table_and_footer():
+    from backend.services.pdf import _build_html
+
+    final_state = {
+        "market_report": "# M\nx",
+        "final_trade_decision": "**Rating**: Buy",
+        "portfolio_decision": {
+            "rating": "Buy",
+            "conviction_score": 8,
+            "executive_summary": "建仓区间 250-255",
+            "investment_thesis": "多头论据更强",
+            "price_target": 300.0,
+            "stop_loss": 240.0,
+            "breakout_point": 260.0,
+            "time_horizon": "1-3 个月",
+            "outlook_30d": "区间震荡",
+            "outlook_60d": "趋势向上",
+            "outlook_90d": "突破确认加仓",
+        },
+        "run_meta": {
+            "generated_at": "2026-02-02T03:04:05Z",
+            "model": "deepseek-v4-pro",
+            "provider": "DeepSeek",
+            "tokens": {"total_tokens": 1234, "cost_usd": 0.05},
+            "disclaimer": "本报告由 AI 多智能体系统自动生成,不构成任何投资建议。",
+        },
+    }
+    html = _build_html(final_state, "TEST", "2026-02-02")
+    assert "<table" in html
+    assert "8/10" in html
+    assert "建仓区间 250-255" in html
+    assert "240" in html
+    assert "本报告由 AI 多智能体系统自动生成" in html
+    assert "deepseek-v4-pro" in html
+
+
+def test_pdf_html_falls_back_to_markdown_when_no_structured_decision():
+    from backend.services.pdf import _build_html
+
+    html = _build_html(
+        {"final_trade_decision": "**Rating**: Hold\n纯文本回退"},
+        "TEST",
+        "2026-02-02",
+    )
+    assert "纯文本回退" in html
