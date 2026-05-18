@@ -183,6 +183,15 @@ class PortfolioDecision(BaseModel):
             "Underweight / Sell, picked based on the analysts' debate."
         ),
     )
+    conviction_score: Optional[int] = Field(
+        default=None,
+        description=(
+            "Conviction in this rating on a 1-10 integer scale (1 = very low "
+            "conviction, 10 = very high). Base it on how decisively the "
+            "analysts' debate favored one side and the quality of the "
+            "supporting evidence."
+        ),
+    )
     executive_summary: str = Field(
         description=(
             "A concise action plan covering entry strategy, position sizing, "
@@ -239,6 +248,10 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     """
     parts = [
         f"**Rating**: {decision.rating.value}",
+    ]
+    if decision.conviction_score is not None:
+        parts.append(f"**Conviction**: {decision.conviction_score}/10")
+    parts += [
         "",
         f"**Executive Summary**: {decision.executive_summary}",
         "",
