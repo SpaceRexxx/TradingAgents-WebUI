@@ -173,6 +173,10 @@ export function deriveProgress(
   const doneCount = agents.filter((a) => a.status === "done").length;
   const percent = Math.round((doneCount / AGENT_DEFS.length) * 100);
 
+  // `researchDepth` intentionally drives BOTH totals: the UI's single
+  // research-depth control sets max_debate_rounds AND max_risk_discuss_rounds
+  // (see AnalysisPage config_overrides). If those depths ever decouple,
+  // pass a separate risk depth here instead of reusing researchDepth.
   const researchRound = deriveRound(
     numSub(report, "investment_debate_state", "count"),
     researchDepth,

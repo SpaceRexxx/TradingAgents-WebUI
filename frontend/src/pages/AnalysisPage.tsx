@@ -364,6 +364,7 @@ export default function AnalysisPage() {
           <div className="card col" style={{ gap: 4, minWidth: 180 }}>
             {progress.agents.map((a) => (
               <Fragment key={a.key}>
+                {/* "bull"/"aggressive" must match AGENT_DEFS keys in util/progress.ts */}
                 {a.key === "bull" && progress.researchRound && (
                   <div className="muted" style={{ fontSize: "var(--fz-sm)", padding: "2px 6px" }}>
                     研究辩论 第 {progress.researchRound.current}/{progress.researchRound.total} 轮
