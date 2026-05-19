@@ -128,8 +128,12 @@ def test_trader_proposal_requires_plan_alignment_and_self_check():
     from pydantic import ValidationError
     from tradingagents.agents.schemas import TraderProposal
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError):  # both missing
         TraderProposal(action="Sell", reasoning="r")
+    with pytest.raises(ValidationError):  # self_check missing
+        TraderProposal(action="Sell", reasoning="r", plan_alignment="a")
+    with pytest.raises(ValidationError):  # plan_alignment missing
+        TraderProposal(action="Sell", reasoning="r", self_check="s")
 
     tp = TraderProposal(
         action="Sell",
@@ -137,8 +141,8 @@ def test_trader_proposal_requires_plan_alignment_and_self_check():
         plan_alignment="研究计划评级 Underweight → 减仓,本提案方向一致",
         self_check="☑ 行动方向与研究计划评级一致\n☑ 无未溯源数字\n☑ 已给出入场/止损\n☑ 已覆盖关键风险",
     )
-    assert tp.plan_alignment
-    assert tp.self_check
+    assert tp.plan_alignment == "研究计划评级 Underweight → 减仓,本提案方向一致"
+    assert tp.self_check == "☑ 行动方向与研究计划评级一致\n☑ 无未溯源数字\n☑ 已给出入场/止损\n☑ 已覆盖关键风险"
 
 
 def test_render_trader_proposal_includes_alignment_and_selfcheck():
@@ -170,7 +174,7 @@ def test_portfolio_decision_requires_self_check():
         rating="Buy", executive_summary="s", investment_thesis="t",
         self_check="☑ 结论锚定风险辩论具体证据",
     )
-    assert d.self_check
+    assert d.self_check == "☑ 结论锚定风险辩论具体证据"
 
 
 def test_render_pm_decision_includes_self_check():
@@ -185,3 +189,4 @@ def test_render_pm_decision_includes_self_check():
     assert "**【自检】**" in md
     assert "☑ 结论锚定风险辩论具体证据" in md
     assert "**Rating**: Hold" in md
+    assert md.index("**【自检】**") > md.index("**Investment Thesis**")
