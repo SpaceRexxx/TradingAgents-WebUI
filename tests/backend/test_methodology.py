@@ -78,3 +78,13 @@ def test_sentiment_methodology_has_selfcheck_block():
     assert "## 输出末尾自检" in text
     assert "【自检】" in text
     assert "每个情绪结论可回溯到注入的数据块" in text
+
+
+def test_trader_pm_methodology_reference_structured_selfcheck():
+    t = get_methodology("trader")
+    assert "self_check" in t
+    assert "plan_alignment" in t
+    assert "【自检】" in t  # Phase A invariant kept
+    p = get_methodology("portfolio_manager")
+    assert "self_check" in p
+    assert "【自检】" in p
