@@ -137,6 +137,7 @@ describe("deriveProgress debate rounds", () => {
     const r = (c: number) =>
       deriveProgress({ risk_debate_state: { count: c } }, true, 1).riskRound;
     expect(r(0)).toEqual({ current: 1, total: 1, done: false });
+    expect(r(1)).toEqual({ current: 1, total: 1, done: false });
     expect(r(2)).toEqual({ current: 1, total: 1, done: false });
     expect(r(3)).toEqual({ current: 1, total: 1, done: true });
   });

@@ -33,6 +33,9 @@ interface AgentDef {
   extract: (r: Record<string, unknown>) => string;
 }
 
+const RESEARCH_SPEAKERS_PER_ROUND = 2; // 多头 + 空头
+const RISK_SPEAKERS_PER_ROUND = 3; // 激进 + 保守 + 中立
+
 const PHASE_DEFS: { key: string; label: string }[] = [
   { key: "analysts", label: "分析师团队" },
   { key: "research", label: "研究团队辩论" },
@@ -173,12 +176,12 @@ export function deriveProgress(
   const researchRound = deriveRound(
     numSub(report, "investment_debate_state", "count"),
     researchDepth,
-    2,
+    RESEARCH_SPEAKERS_PER_ROUND,
   );
   const riskRound = deriveRound(
     numSub(report, "risk_debate_state", "count"),
     researchDepth,
-    3,
+    RISK_SPEAKERS_PER_ROUND,
   );
 
   return { agents, phases, percent, researchRound, riskRound };
