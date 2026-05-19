@@ -71,3 +71,10 @@ def test_fundamentals_methodology_tightened():
     assert "指标 | 数值 | 期间 | 来源(工具/报表) | 实值或估算" in text
     assert "【自检】" in text
     assert "期间强制" in text
+
+
+def test_sentiment_methodology_has_selfcheck_block():
+    text = get_methodology("sentiment")
+    assert "## 输出末尾自检" in text
+    assert "【自检】" in text
+    assert "每个情绪结论可回溯到注入的数据块" in text
