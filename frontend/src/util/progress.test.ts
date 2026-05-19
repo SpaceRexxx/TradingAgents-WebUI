@@ -85,3 +85,83 @@ describe("deriveProgress", () => {
     expect(all.percent).toBe(100);
   });
 });
+
+describe("deriveProgress debate rounds", () => {
+  it("returns null rounds when debate state absent", () => {
+    const p = deriveProgress({ market_report: "x" }, true, 2);
+    expect(p.researchRound).toBeNull();
+    expect(p.riskRound).toBeNull();
+  });
+
+  it("returns null rounds when researchDepth missing/invalid", () => {
+    const p = deriveProgress(
+      { investment_debate_state: { count: 1 } },
+      true,
+    );
+    expect(p.researchRound).toBeNull();
+    const p0 = deriveProgress(
+      { investment_debate_state: { count: 1 } },
+      true,
+      0,
+    );
+    expect(p0.researchRound).toBeNull();
+  });
+
+  it("research debate N=1: count 0/1 -> round 1/1, count 2 -> done", () => {
+    expect(
+      deriveProgress({ investment_debate_state: { count: 0 } }, true, 1)
+        .researchRound,
+    ).toEqual({ current: 1, total: 1, done: false });
+    expect(
+      deriveProgress({ investment_debate_state: { count: 1 } }, true, 1)
+        .researchRound,
+    ).toEqual({ current: 1, total: 1, done: false });
+    expect(
+      deriveProgress({ investment_debate_state: { count: 2 } }, true, 1)
+        .researchRound,
+    ).toEqual({ current: 1, total: 1, done: true });
+  });
+
+  it("research debate N=2: count 0..4 progression", () => {
+    const r = (c: number) =>
+      deriveProgress({ investment_debate_state: { count: c } }, true, 2)
+        .researchRound;
+    expect(r(0)).toEqual({ current: 1, total: 2, done: false });
+    expect(r(1)).toEqual({ current: 1, total: 2, done: false });
+    expect(r(2)).toEqual({ current: 2, total: 2, done: false });
+    expect(r(3)).toEqual({ current: 2, total: 2, done: false });
+    expect(r(4)).toEqual({ current: 2, total: 2, done: true });
+  });
+
+  it("risk debate N=1: count 0..2 -> 1/1, count 3 -> done", () => {
+    const r = (c: number) =>
+      deriveProgress({ risk_debate_state: { count: c } }, true, 1).riskRound;
+    expect(r(0)).toEqual({ current: 1, total: 1, done: false });
+    expect(r(2)).toEqual({ current: 1, total: 1, done: false });
+    expect(r(3)).toEqual({ current: 1, total: 1, done: true });
+  });
+
+  it("risk debate N=2: count 0..6 progression", () => {
+    const r = (c: number) =>
+      deriveProgress({ risk_debate_state: { count: c } }, true, 2).riskRound;
+    expect(r(0)).toEqual({ current: 1, total: 2, done: false });
+    expect(r(2)).toEqual({ current: 1, total: 2, done: false });
+    expect(r(3)).toEqual({ current: 2, total: 2, done: false });
+    expect(r(5)).toEqual({ current: 2, total: 2, done: false });
+    expect(r(6)).toEqual({ current: 2, total: 2, done: true });
+  });
+
+  it("clamps out-of-range count to total", () => {
+    expect(
+      deriveProgress({ investment_debate_state: { count: 99 } }, true, 2)
+        .researchRound,
+    ).toEqual({ current: 2, total: 2, done: true });
+  });
+
+  it("omitting researchDepth keeps existing 2-arg behavior", () => {
+    const p = deriveProgress({ market_report: "done" }, true);
+    expect(p.agents.find((a) => a.key === "market")!.status).toBe("done");
+    expect(p.researchRound).toBeNull();
+    expect(p.riskRound).toBeNull();
+  });
+});

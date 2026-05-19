@@ -20,6 +20,12 @@ export interface PhaseView {
   status: AgentStatus;
 }
 
+export interface DebateRound {
+  current: number;
+  total: number;
+  done: boolean;
+}
+
 interface AgentDef {
   key: string;
   label: string;
@@ -43,6 +49,40 @@ function sub(r: Record<string, unknown>, parent: string, child: string): string 
   const p = r[parent];
   if (p && typeof p === "object") return str((p as Record<string, unknown>)[child]);
   return "";
+}
+
+function numSub(
+  r: Record<string, unknown>,
+  parent: string,
+  child: string,
+): number | null {
+  const p = r[parent];
+  if (p && typeof p === "object") {
+    const v = (p as Record<string, unknown>)[child];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+function deriveRound(
+  count: number | null,
+  total: number | undefined,
+  speakersPerRound: number,
+): DebateRound | null {
+  if (
+    count === null ||
+    total === undefined ||
+    !Number.isFinite(total) ||
+    total < 1
+  ) {
+    return null;
+  }
+  const limit = speakersPerRound * total;
+  const done = count >= limit;
+  const current = done
+    ? total
+    : Math.min(Math.floor(count / speakersPerRound) + 1, total);
+  return { current, total, done };
 }
 
 function isStreaming(r: Record<string, unknown>, key: string): boolean {
@@ -80,6 +120,10 @@ export interface Progress {
   phases: PhaseView[];
   /** 0-100, share of agents that have produced content. */
   percent: number;
+  /** 研究辩论(多/空)轮次进度;debate 未开始或 researchDepth 无效时为 null。 */
+  researchRound: DebateRound | null;
+  /** 风险辩论(激进/保守/中立)轮次进度;同上。 */
+  riskRound: DebateRound | null;
 }
 
 /**
@@ -89,6 +133,7 @@ export interface Progress {
 export function deriveProgress(
   report: Record<string, unknown>,
   running: boolean,
+  researchDepth?: number,
 ): Progress {
   const contents = AGENT_DEFS.map((a) => a.extract(report));
   const streaming = AGENT_DEFS.map((a) => isStreaming(report, a.key));
@@ -125,5 +170,16 @@ export function deriveProgress(
   const doneCount = agents.filter((a) => a.status === "done").length;
   const percent = Math.round((doneCount / AGENT_DEFS.length) * 100);
 
-  return { agents, phases, percent };
+  const researchRound = deriveRound(
+    numSub(report, "investment_debate_state", "count"),
+    researchDepth,
+    2,
+  );
+  const riskRound = deriveRound(
+    numSub(report, "risk_debate_state", "count"),
+    researchDepth,
+    3,
+  );
+
+  return { agents, phases, percent, researchRound, riskRound };
 }
