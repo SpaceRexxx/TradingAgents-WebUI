@@ -23,7 +23,7 @@
 
 ## 组件与数据流
 
-- **`frontend/src/lib/progress.ts`**(已负责把 chunk 映射为 agent 状态):新增纯函数派生逻辑,从 chunk 的 `investment_debate_state` / `risk_debate_state` 取 `count`,结合外部传入的 `total`(= researchDepth),产出两个值:
+- **`frontend/src/util/progress.ts`**(已负责把 chunk 映射为 agent 状态):新增纯函数派生逻辑,从 chunk 的 `investment_debate_state` / `risk_debate_state` 取 `count`,结合外部传入的 `total`(= researchDepth),产出两个值:
   - `researchRound: { current: number; total: number; done: boolean } | null`
   - `riskRound: { current: number; total: number; done: boolean } | null`
   - 规则:对应 debate 的 `count` 尚未出现(undefined/缺失)或 `total` 无效(<1)时返回 `null`。`current = min(floor(count / k) + 1, total)`(研究 k=2,风险 k=3);`done = count >= k * total`;`done` 时 `current = total`。
