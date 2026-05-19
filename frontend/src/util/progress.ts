@@ -35,6 +35,8 @@ interface AgentDef {
 
 const RESEARCH_SPEAKERS_PER_ROUND = 2; // 多头 + 空头
 const RISK_SPEAKERS_PER_ROUND = 3; // 激进 + 保守 + 中立
+const RESEARCH_DEBATERS = new Set(["bull", "bear"]);
+const RISK_DEBATERS = new Set(["aggressive", "conservative", "neutral"]);
 
 const PHASE_DEFS: { key: string; label: string }[] = [
   { key: "analysts", label: "分析师团队" },
@@ -187,6 +189,20 @@ export function deriveProgress(
     researchDepth,
     RISK_SPEAKERS_PER_ROUND,
   );
+
+  // While a multi-round debate is still in progress, a debater that has
+  // already spoken once is NOT done — it will speak again in later rounds.
+  // Downgrade its "done" to "running" until the debate's round is complete.
+  // phases/percent were computed above from pre-downgrade statuses and are
+  // intentionally left unchanged.
+  for (const a of agents) {
+    if (a.status !== "done") continue;
+    if (RESEARCH_DEBATERS.has(a.key) && researchRound && !researchRound.done) {
+      a.status = "running";
+    } else if (RISK_DEBATERS.has(a.key) && riskRound && !riskRound.done) {
+      a.status = "running";
+    }
+  }
 
   return { agents, phases, percent, researchRound, riskRound };
 }

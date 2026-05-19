@@ -166,3 +166,81 @@ describe("deriveProgress debate rounds", () => {
     expect(p.riskRound).toBeNull();
   });
 });
+
+describe("deriveProgress debate agents not done until debate done", () => {
+  const statusOf = (p: ReturnType<typeof deriveProgress>, key: string) =>
+    p.agents.find((a) => a.key === key)!.status;
+
+  it("research debate ongoing (N=2, count=2): bull/bear running, not done", () => {
+    const p = deriveProgress(
+      {
+        market_report: "m",
+        investment_debate_state: { count: 2, bull_history: "b", bear_history: "x" },
+      },
+      true,
+      2,
+    );
+    expect(p.researchRound).toEqual({ current: 2, total: 2, done: false });
+    expect(statusOf(p, "bull")).toBe("running");
+    expect(statusOf(p, "bear")).toBe("running");
+    expect(statusOf(p, "market")).toBe("done");
+  });
+
+  it("research debate done (N=2, count=4): bull/bear done", () => {
+    const p = deriveProgress(
+      {
+        investment_debate_state: { count: 4, bull_history: "b", bear_history: "x" },
+      },
+      true,
+      2,
+    );
+    expect(p.researchRound).toEqual({ current: 2, total: 2, done: true });
+    expect(statusOf(p, "bull")).toBe("done");
+    expect(statusOf(p, "bear")).toBe("done");
+  });
+
+  it("risk debate ongoing (N=1, count=1): aggressive running; done (count=3): done", () => {
+    const ongoing = deriveProgress(
+      { risk_debate_state: { count: 1, aggressive_history: "a" } },
+      true,
+      1,
+    );
+    expect(ongoing.riskRound).toEqual({ current: 1, total: 1, done: false });
+    expect(statusOf(ongoing, "aggressive")).toBe("running");
+
+    const done = deriveProgress(
+      { risk_debate_state: { count: 3, aggressive_history: "a" } },
+      true,
+      1,
+    );
+    expect(done.riskRound).toEqual({ current: 1, total: 1, done: true });
+    expect(statusOf(done, "aggressive")).toBe("done");
+  });
+
+  it("research_manager / portfolio_manager NOT downgraded while debate not done", () => {
+    const p = deriveProgress(
+      {
+        investment_debate_state: {
+          count: 2,
+          bull_history: "b",
+          bear_history: "x",
+          judge_decision: "jd",
+        },
+        risk_debate_state: { count: 1, judge_decision: "fd" },
+        final_trade_decision: "ftd",
+      },
+      true,
+      2,
+    );
+    expect(statusOf(p, "research_manager")).toBe("done");
+    expect(statusOf(p, "portfolio_manager")).toBe("done");
+  });
+
+  it("no regression when researchRound is null (debate not started)", () => {
+    const before = deriveProgress({ market_report: "m" }, true);
+    const after = deriveProgress({ market_report: "m" }, true, 2);
+    expect(after.researchRound).toBeNull();
+    expect(statusOf(after, "bull")).toBe(statusOf(before, "bull"));
+    expect(statusOf(after, "market")).toBe("done");
+  });
+});
