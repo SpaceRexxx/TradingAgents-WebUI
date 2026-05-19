@@ -62,3 +62,12 @@ def test_phase_a_decision_agent_modules_import():
         "tradingagents.agents.trader.trader",
     ):
         importlib.import_module(mod)
+
+
+def test_fundamentals_methodology_tightened():
+    text = get_methodology("fundamentals")
+    assert "实值优先" in text
+    assert "估算·非工具直接读取" in text
+    assert "指标 | 数值 | 期间 | 来源(工具/报表) | 实值或估算" in text
+    assert "【自检】" in text
+    assert "期间强制" in text
