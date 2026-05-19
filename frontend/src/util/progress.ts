@@ -35,6 +35,7 @@ interface AgentDef {
 
 const RESEARCH_SPEAKERS_PER_ROUND = 2; // 多头 + 空头
 const RISK_SPEAKERS_PER_ROUND = 3; // 激进 + 保守 + 中立
+// Keys must match the corresponding AGENT_DEFS entries above.
 const RESEARCH_DEBATERS = new Set(["bull", "bear"]);
 const RISK_DEBATERS = new Set(["aggressive", "conservative", "neutral"]);
 
