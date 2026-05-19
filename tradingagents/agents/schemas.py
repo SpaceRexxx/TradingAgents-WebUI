@@ -124,6 +124,24 @@ class TraderProposal(BaseModel):
             "the research plan. Two to four sentences."
         ),
     )
+    plan_alignment: str = Field(
+        description=(
+            "State how this action maps from the Research Manager's investment "
+            "plan rating (Buy / Overweight / Hold / Underweight / Sell). If the "
+            "action's direction diverges from that rating, give an explicit "
+            "justification for the divergence."
+        ),
+    )
+    self_check: str = Field(
+        description=(
+            "A self-check block the trader MUST fill — one line per item, each "
+            "starting with ☑ followed by a brief justification:\n"
+            "☑ 行动方向与研究计划评级一致(或已说明分歧理由)\n"
+            "☑ 无未溯源数字\n"
+            "☑ 已给出明确入场/止损参考\n"
+            "☑ 已覆盖分析师报告中的关键风险"
+        ),
+    )
     entry_price: Optional[float] = Field(
         default=None,
         description="Optional entry price target in the instrument's quote currency.",
@@ -156,6 +174,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    parts.extend(["", f"**计划对齐**: {proposal.plan_alignment}"])
+    parts.extend(["", "**【自检】**", proposal.self_check])
     parts.extend([
         "",
         f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
@@ -205,6 +225,16 @@ class PortfolioDecision(BaseModel):
             "Detailed reasoning anchored in specific evidence from the analysts' "
             "debate. If prior lessons are referenced in the prompt context, "
             "incorporate them; otherwise rely solely on the current analysis."
+        ),
+    )
+    self_check: str = Field(
+        description=(
+            "A self-check block the Portfolio Manager MUST fill — one line per "
+            "item, each starting with ☑ followed by a brief justification:\n"
+            "☑ 结论锚定风险辩论具体证据\n"
+            "☑ 无未溯源数字\n"
+            "☑ 已按 has_position 个性化(建仓区间或加/减/保持)\n"
+            "☑ 止损与展望与评级一致;已纳入历史教训(若提供)"
         ),
     )
     price_target: Optional[float] = Field(
@@ -273,4 +303,5 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         parts.extend(["", f"**60-Day Outlook**: {decision.outlook_60d}"])
     if decision.outlook_90d:
         parts.extend(["", f"**90-Day Outlook**: {decision.outlook_90d}"])
+    parts.extend(["", "**【自检】**", decision.self_check])
     return "\n".join(parts)
