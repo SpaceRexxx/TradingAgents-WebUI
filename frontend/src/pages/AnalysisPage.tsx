@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { startAnalysis, abortAnalysis, pdfUrl, getQuote } from "../api/client";
 import { useAnalysisStream } from "../hooks/useAnalysisStream";
 import { usePrefs } from "../hooks/usePrefs";
@@ -77,8 +77,8 @@ export default function AnalysisPage() {
 
   const running = stream.status === "running";
   const progress = useMemo(
-    () => deriveProgress(stream.report, running),
-    [stream.report, running],
+    () => deriveProgress(stream.report, running, prefs.researchDepth),
+    [stream.report, running, prefs.researchDepth],
   );
 
   // Elapsed-time ticker: runs while the stream is running.
@@ -363,20 +363,33 @@ export default function AnalysisPage() {
         <div className="row" style={{ alignItems: "flex-start", gap: "var(--sp-4)" }}>
           <div className="card col" style={{ gap: 4, minWidth: 180 }}>
             {progress.agents.map((a) => (
-              <button
-                key={a.key}
-                onClick={() => setSelectedAgent(a.key)}
-                className="btn-ghost"
-                aria-label={a.label}
-                style={{
-                  textAlign: "left",
-                  border: 0,
-                  background: a.key === selectedAgent ? "var(--c-surface-2)" : "transparent",
-                  fontWeight: a.key === selectedAgent ? 700 : 400,
-                }}
-              >
-                {statusIcon(a.status)} {a.label}
-              </button>
+              <Fragment key={a.key}>
+                {a.key === "bull" && progress.researchRound && (
+                  <div className="muted" style={{ fontSize: "var(--fz-sm)", padding: "2px 6px" }}>
+                    研究辩论 第 {progress.researchRound.current}/{progress.researchRound.total} 轮
+                    {progress.researchRound.done ? " ✓" : ""}
+                  </div>
+                )}
+                {a.key === "aggressive" && progress.riskRound && (
+                  <div className="muted" style={{ fontSize: "var(--fz-sm)", padding: "2px 6px" }}>
+                    风险辩论 第 {progress.riskRound.current}/{progress.riskRound.total} 轮
+                    {progress.riskRound.done ? " ✓" : ""}
+                  </div>
+                )}
+                <button
+                  onClick={() => setSelectedAgent(a.key)}
+                  className="btn-ghost"
+                  aria-label={a.label}
+                  style={{
+                    textAlign: "left",
+                    border: 0,
+                    background: a.key === selectedAgent ? "var(--c-surface-2)" : "transparent",
+                    fontWeight: a.key === selectedAgent ? 700 : 400,
+                  }}
+                >
+                  {statusIcon(a.status)} {a.label}
+                </button>
+              </Fragment>
             ))}
           </div>
           <div className="card" style={{ flex: 1, minWidth: 0 }}>
