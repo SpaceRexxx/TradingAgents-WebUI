@@ -1,3 +1,5 @@
+import logging
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from tradingagents.agents.utils.agent_utils import (
@@ -10,6 +12,9 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_methodology,
 )
+
+logger = logging.getLogger(__name__)
+
 
 def create_fundamentals_analyst(llm):
     def fundamentals_analyst_node(state):
@@ -48,11 +53,8 @@ def create_fundamentals_analyst(llm):
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
 
         final_report = result["messages"][-1].content
-        if not (final_report or "").strip():
-            import logging
-            logging.getLogger(__name__).warning(
-                "Fundamentals Analyst: returned empty content; retrying once"
-            )
+        if not final_report.strip():
+            logger.warning("Fundamentals Analyst: returned empty content; retrying once")
             result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
             final_report = result["messages"][-1].content
         internal_messages = result["messages"][2:]

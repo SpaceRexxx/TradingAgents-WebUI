@@ -19,6 +19,7 @@ turn 0. The LLM produces the sentiment report in a single invocation.
 See: https://github.com/TauricResearch/TradingAgents/issues/557
 """
 
+import logging
 from datetime import datetime, timedelta
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -36,6 +37,8 @@ from tradingagents.dataflows.eastmoney_sentiment import (
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 from tradingagents.dataflows.xueqiu import fetch_xueqiu_comments
+
+logger = logging.getLogger(__name__)
 
 _REDDIT_DISABLED_PLACEHOLDER = (
     "<Reddit 数据源已在配置中关闭（reddit_enabled=False）。"
@@ -115,11 +118,8 @@ def create_sentiment_analyst(llm):
         chain = prompt | llm
         result = chain.invoke(state["messages"])
 
-        if not (result.content or "").strip():
-            import logging
-            logging.getLogger(__name__).warning(
-                "Sentiment Analyst: returned empty content; retrying once"
-            )
+        if not result.content.strip():
+            logger.warning("Sentiment Analyst: returned empty content; retrying once")
             result = chain.invoke(state["messages"])
 
         return {

@@ -1,9 +1,9 @@
 """Unit tests for analyst nodes' inline auto-retry-once on empty output."""
+import logging
 from unittest.mock import MagicMock
 
 
 def test_market_analyst_auto_retries_once_on_empty(monkeypatch, caplog):
-    import logging
     from tradingagents.agents.analysts import market_analyst as ma
 
     calls = {"n": 0}
@@ -25,15 +25,17 @@ def test_market_analyst_auto_retries_once_on_empty(monkeypatch, caplog):
     assert any("empty" in r.message.lower() and "retry" in r.message.lower() for r in caplog.records)
 
 
-def test_market_analyst_still_empty_after_retry(monkeypatch):
+def test_market_analyst_still_empty_after_retry(monkeypatch, caplog):
     from tradingagents.agents.analysts import market_analyst as ma
     fake_agent = MagicMock()
     fake_agent.invoke.return_value = {"messages": [MagicMock(content="")]}
     monkeypatch.setattr(ma, "create_react_agent", lambda *_a, **_kw: fake_agent)
     node = ma.create_market_analyst(MagicMock())
-    out = node({"trade_date": "2026-05-20", "company_of_interest": "TEST", "lookback_days": 30})
+    with caplog.at_level(logging.WARNING):
+        out = node({"trade_date": "2026-05-20", "company_of_interest": "TEST", "lookback_days": 30})
     assert out["market_report"] == ""
     assert fake_agent.invoke.call_count == 2
+    assert any("empty" in r.message.lower() for r in caplog.records)
 
 
 def test_news_analyst_auto_retries_once_on_empty(monkeypatch):

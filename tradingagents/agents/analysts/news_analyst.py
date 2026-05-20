@@ -1,3 +1,5 @@
+import logging
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from tradingagents.agents.utils.agent_utils import (
@@ -8,6 +10,9 @@ from tradingagents.agents.utils.agent_utils import (
     get_news,
 )
 from tradingagents.dataflows.eastmoney_sentiment import to_a_share_code
+
+logger = logging.getLogger(__name__)
+
 
 def create_news_analyst(llm):
     def news_analyst_node(state):
@@ -53,11 +58,8 @@ def create_news_analyst(llm):
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
 
         final_report = result["messages"][-1].content
-        if not (final_report or "").strip():
-            import logging
-            logging.getLogger(__name__).warning(
-                "News Analyst: returned empty content; retrying once"
-            )
+        if not final_report.strip():
+            logger.warning("News Analyst: returned empty content; retrying once")
             result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
             final_report = result["messages"][-1].content
         internal_messages = result["messages"][2:]
