@@ -115,6 +115,13 @@ def create_sentiment_analyst(llm):
         chain = prompt | llm
         result = chain.invoke(state["messages"])
 
+        if not (result.content or "").strip():
+            import logging
+            logging.getLogger(__name__).warning(
+                "Sentiment Analyst: returned empty content; retrying once"
+            )
+            result = chain.invoke(state["messages"])
+
         return {
             "messages": [result],
             "sentiment_report": result.content,

@@ -52,6 +52,13 @@ def create_market_analyst(llm):
         result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
 
         final_report = result["messages"][-1].content
+        if not (final_report or "").strip():
+            import logging
+            logging.getLogger(__name__).warning(
+                "Market Analyst: returned empty content; retrying once"
+            )
+            result = agent.invoke({"messages": [SystemMessage(content=system_message), HumanMessage(content=prompt_content)]})
+            final_report = result["messages"][-1].content
         internal_messages = result["messages"][2:]
 
         return {
