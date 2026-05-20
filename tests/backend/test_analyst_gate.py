@@ -51,3 +51,16 @@ def test_agent_state_registers_halted_analysts_key():
     from tradingagents.agents.utils.agent_states import AgentState
 
     assert "halted_analysts" in AgentState.__annotations__
+
+
+def test_analyst_gate_compute_halted_when_key_entirely_missing():
+    """Missing key (state.get returns None) is treated as empty -> failed."""
+    from tradingagents.graph.setup import compute_halted_analysts
+
+    state = {
+        "market_report": "m",
+        # sentiment_report key entirely absent
+        "news_report": "n",
+        "fundamentals_report": "f",
+    }
+    assert compute_halted_analysts(state) == ["social"]

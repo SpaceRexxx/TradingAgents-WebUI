@@ -23,7 +23,7 @@ def compute_halted_analysts(state: dict) -> list[str]:
     failed: list[str] = []
     for key, field in _ANALYST_REPORT_FIELDS.items():
         val = state.get(field) or ""
-        if not str(val).strip():
+        if not val.strip():
             failed.append(key)
     return failed
 
@@ -35,7 +35,6 @@ def analyst_gate_decider(state: dict) -> str:
     otherwise returns ``END`` (the main workflow terminates and the runner
     treats the state as halted-pending-retry).
     """
-    from langgraph.graph import END
     return "Bull Researcher" if not compute_halted_analysts(state) else END
 
 
