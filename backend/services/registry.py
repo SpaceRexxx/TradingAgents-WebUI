@@ -15,6 +15,7 @@ class RunStatus(str, Enum):
     DONE = "done"
     ABORTED = "aborted"
     ERROR = "error"
+    HALTED = "halted"
 
 
 @dataclass
@@ -27,6 +28,8 @@ class RunHandle:
     final_state: dict[str, Any] | None = None
     error: str | None = None
     task: asyncio.Task | None = None
+    retry_count_by_analyst: dict[str, int] = field(default_factory=dict)
+    _retry_lock_held: bool = False
 
     async def emit(self, event: dict[str, Any]) -> None:
         await self.queue.put(event)
@@ -54,8 +57,28 @@ class RunHandle:
         self.status = RunStatus.ABORTED
         await self.emit({"type": "aborted"})
 
+    async def mark_halted(self, failed_analysts: list[str]) -> None:
+        self.status = RunStatus.HALTED
+        await self.emit({"type": "halted", "failed_analysts": list(failed_analysts)})
+
+    def get_retry_count(self, analyst: str) -> int:
+        return self.retry_count_by_analyst.get(analyst, 0)
+
+    def increment_retry(self, analyst: str) -> int:
+        self.retry_count_by_analyst[analyst] = self.get_retry_count(analyst) + 1
+        return self.retry_count_by_analyst[analyst]
+
+    def try_acquire_retry_lock(self) -> bool:
+        if self._retry_lock_held:
+            return False
+        self._retry_lock_held = True
+        return True
+
+    def release_retry_lock(self) -> None:
+        self._retry_lock_held = False
+
     def is_terminal(self) -> bool:
-        return self.status in {RunStatus.DONE, RunStatus.ABORTED, RunStatus.ERROR}
+        return self.status in {RunStatus.DONE, RunStatus.ABORTED, RunStatus.ERROR, RunStatus.HALTED}
 
 
 class RunRegistry:
