@@ -10,6 +10,35 @@ from tradingagents.agents.utils.agent_states import AgentState
 from .conditional_logic import ConditionalLogic
 
 
+_ANALYST_REPORT_FIELDS = {
+    "market": "market_report",
+    "social": "sentiment_report",
+    "news": "news_report",
+    "fundamentals": "fundamentals_report",
+}
+
+
+def compute_halted_analysts(state: dict) -> list[str]:
+    """Return the list of analyst keys whose report is missing or whitespace-only."""
+    failed: list[str] = []
+    for key, field in _ANALYST_REPORT_FIELDS.items():
+        val = state.get(field) or ""
+        if not str(val).strip():
+            failed.append(key)
+    return failed
+
+
+def analyst_gate_decider(state: dict) -> str:
+    """Conditional routing after the Analyst Team subgraph.
+
+    Returns ``"Bull Researcher"`` when all four analyst reports are non-empty,
+    otherwise returns ``END`` (the main workflow terminates and the runner
+    treats the state as halted-pending-retry).
+    """
+    from langgraph.graph import END
+    return "Bull Researcher" if not compute_halted_analysts(state) else END
+
+
 class GraphSetup:
     """Handles the setup and configuration of the agent graph."""
 
@@ -127,7 +156,11 @@ class GraphSetup:
 
         # Main Graph Edges
         workflow.add_edge(START, "Analyst Team")
-        workflow.add_edge("Analyst Team", "Bull Researcher")
+        workflow.add_conditional_edges(
+            "Analyst Team",
+            analyst_gate_decider,
+            {"Bull Researcher": "Bull Researcher", END: END},
+        )
 
         # Add remaining edges
         workflow.add_conditional_edges(

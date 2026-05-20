@@ -77,3 +77,4 @@ class AgentState(MessagesState):
     final_trade_decision: Annotated[str, "由风险分析师做出的最终交易决策"]
     portfolio_decision: Annotated[dict, "投资组合经理结构化决策(PortfolioDecision.model_dump);自由文本回退时为 None"]
     past_context: Annotated[str, "运行开始时注入的记忆日志上下文（同标的历史决策 + 跨标的经验教训）"]
+    halted_analysts: Annotated[list[str], "分析师空内容时记录失败键列表(market/social/news/fundamentals)"]
